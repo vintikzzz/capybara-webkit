@@ -37,8 +37,11 @@ module Capybara::Webkit
         begin
           yield
         rescue StandardError => e
-          close
-          raise e
+          begin
+            close
+          rescue StandardError => e2
+            raise e
+          end
         end
         close
       end

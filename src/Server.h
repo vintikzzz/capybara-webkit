@@ -7,13 +7,15 @@ class Server : public QObject {
 
   public:
     Server(QObject *parent);
-    bool start();
+    bool start(int port = 0);
     quint16 server_port() const;
 
   public slots:
     void handleConnection();
+    void handleDisconnection();
 
   private:
     QTcpServer *m_tcp_server;
+    QTcpSocket *m_tcp_socket;
 };
 

@@ -12,6 +12,9 @@ module Capybara::Webkit
   class NoResponseError < StandardError
   end
 
+  class OnlyOneConnectionError < StandardError
+  end
+
   class NodeNotAttachedError < Capybara::ElementNotFound
   end
 

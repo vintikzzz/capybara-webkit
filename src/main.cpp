@@ -17,10 +17,16 @@ int main(int argc, char **argv) {
   app.setApplicationName("capybara-webkit");
   app.setOrganizationName("thoughtbot, inc");
   app.setOrganizationDomain("thoughtbot.com");
+  QStringList args = app.arguments();
+  int port = 0;
+  if (args.count() == 2) 
+  {
+    port = args[1].toInt();
+  }
 
   Server server(0);
 
-  if (server.start()) {
+  if (server.start(port)) {
     std::cout << "Capybara-webkit server started, listening on port: " << server.server_port() << std::endl;
     return app.exec();
   } else {

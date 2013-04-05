@@ -114,6 +114,9 @@ void WebPageManager::reset() {
   m_pages.clear();
   createPage(this)->setFocus();
 }
+void WebPageManager::emitReset() {
+  reset();
+}
 
 NetworkCookieJar *WebPageManager::cookieJar() {
   return m_cookieJar;

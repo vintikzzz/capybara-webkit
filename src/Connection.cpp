@@ -20,6 +20,7 @@ Connection::Connection(QTcpSocket *socket, WebPageManager *manager, QObject *par
   connect(m_socket, SIGNAL(readyRead()), m_commandParser, SLOT(checkNext()));
   connect(m_commandParser, SIGNAL(commandReady(Command *)), this, SLOT(commandReady(Command *)));
   connect(m_manager, SIGNAL(pageFinished(bool)), this, SLOT(pendingLoadFinished(bool)));
+  connect(m_socket, SIGNAL(disconnected()), m_manager, SLOT(emitReset()));
 }
 
 void Connection::commandReady(Command *command) {

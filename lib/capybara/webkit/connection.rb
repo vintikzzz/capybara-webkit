@@ -12,6 +12,7 @@ module Capybara::Webkit
 
     def initialize(options = {})
       @socket_class = options[:socket_class] || TCPSocket
+      @port = options[:port] || 0
       if options.has_key?(:stderr)
         @output_target = options[:stderr]
       elsif options.has_key?(:stdout)
@@ -49,7 +50,7 @@ module Capybara::Webkit
     end
 
     def open_pipe
-      _, @pipe_stdout, @pipe_stderr, wait_thr = Open3.popen3(SERVER_PATH)
+      _, @pipe_stdout, @pipe_stderr, wait_thr = Open3.popen3(SERVER_PATH + ' ' + @port)
       @pid = wait_thr[:pid]
       register_shutdown_hook
     end

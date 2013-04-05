@@ -2,6 +2,7 @@ require "capybara"
 require "capybara/webkit/version"
 require "capybara/webkit/node"
 require "capybara/webkit/connection"
+require "capybara/webkit/permanent_connection"
 require "capybara/webkit/browser"
 require "capybara/webkit/socket_debugger"
 require "capybara/webkit/cookie_jar"
@@ -14,7 +15,8 @@ module Capybara::Webkit
     def initialize(app, options={})
       @app = app
       @options = options
-      @browser = options[:browser] || Browser.new(Connection.new(options))
+      @connection_class = options[:connection_class] || Connection
+      @browser = options[:browser] || Browser.new(@connection_class.new(options))
     end
 
     def enable_logging

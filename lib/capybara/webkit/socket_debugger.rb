@@ -3,6 +3,7 @@
 module Capybara::Webkit
   class SocketDebugger
     def self.open(host, port)
+      Kernel.puts " >> open #{host}:#{port} <<"
       real_socket = TCPSocket.open(host, port)
       new(real_socket)
     end
@@ -27,6 +28,10 @@ module Capybara::Webkit
 
     def gets
       received @socket.gets
+    end
+    def close
+      Kernel.puts " >> close <<"
+      @socket.close
     end
 
     def setsockopt(level, name, value)

@@ -73,6 +73,11 @@ module CapybaraWebkitBuilder
     sh(make_bin) or return false
 
     FileUtils.mkdir("bin") unless File.directory?("bin")
+    target = File.join('bin', File.basename(path_to_binary))
+    if File.exists?(target) && exec("md5sum #{target} | awk '{print $1}'") == exec("md5sum #{path_to_binary} | awk '{print $1}'")
+      puts "Existing binary is the same"
+      return
+    end
     FileUtils.cp(path_to_binary, "bin", :preserve => true)
   end
 

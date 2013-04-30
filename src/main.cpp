@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
     std::cout << "Capybara-webkit server started, listening on port: " << server.server_port() << std::endl;
     return app.exec();
   } else {
-    std::cerr << "Couldn't start capybara-webkit server" << std::endl;
+    std::cerr << "Couldn't start capybara-webkit server: " << server.error_string().toUtf8().constData() << std::endl;
     return 1;
   }
 }

@@ -17,6 +17,9 @@ bool Server::start(int port) {
 quint16 Server::server_port() const {
   return m_tcp_server->serverPort();
 }
+QString Server::error_string() const {
+  return m_tcp_server->errorString();
+}
 
 void Server::handleConnection() {
   QTcpSocket *socket = m_tcp_server->nextPendingConnection();

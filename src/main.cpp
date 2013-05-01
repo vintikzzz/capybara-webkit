@@ -26,6 +26,7 @@ int main(int argc, char **argv) {
 
   Server server(0);
 
+  QObject::connect(&app, SIGNAL(aboutToQuit()), &server, SLOT(handleTermination()));
   if (server.start(port)) {
     std::cout << "Capybara-webkit server started, listening on port: " << server.server_port() << std::endl;
     return app.exec();

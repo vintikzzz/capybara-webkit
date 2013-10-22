@@ -11,15 +11,16 @@ module Capybara::Webkit
 
     def initialize(options = {})
       @socket_class = options[:socket_class] || TCPSocket
-      @port = options[:port] || 40000
-      @host = options[:host] || '127.0.0.1'
+      @port    = options[:port] || 40000
+      @host    = options[:host] || '127.0.0.1'
+      @timeout = options[:timeout] || 30
     end
 
     def socket
       sockets = self.class.sockets
       s = nil
       if(!sockets.key?(@port))
-        Timeout.timeout(5) do
+        Timeout.timeout(@timeout) do
           while s.nil?
             begin
               s = @socket_class.open(@host, @port)

@@ -7,7 +7,8 @@ require 'base64'
 
 describe Capybara::Webkit::Browser do
 
-  let(:browser) { Capybara::Webkit::Browser.new(Capybara::Webkit::Connection.new) }
+  let(:connection) { Capybara::Webkit::Connection.new }
+  let(:browser) { Capybara::Webkit::Browser.new(connection) }
   let(:browser_ignore_ssl_err) do
     Capybara::Webkit::Browser.new(Capybara::Webkit::Connection.new).tap do |browser|
       browser.ignore_ssl_errors
@@ -85,10 +86,10 @@ describe Capybara::Webkit::Browser do
 
       @server_thread = Thread.new do
         while conn = @server.accept
-          Thread.new(conn) do |conn|
+          Thread.new(conn) do |thread_conn|
             # read request
             request = []
-            until (line = conn.readline.strip).empty?
+            until (line = thread_conn.readline.strip).empty?
               request << line
             end
 
@@ -109,13 +110,13 @@ describe Capybara::Webkit::Browser do
               </body>
             </html>
             HTML
-            conn.write "HTTP/1.1 200 OK\r\n"
-            conn.write "Content-Type:text/html\r\n"
-            conn.write "Content-Length: %i\r\n" % html.size
-            conn.write "\r\n"
-            conn.write html
-            conn.write("\r\n\r\n")
-            conn.close
+            thread_conn.write "HTTP/1.1 200 OK\r\n"
+            thread_conn.write "Content-Type:text/html\r\n"
+            thread_conn.write "Content-Length: %i\r\n" % html.size
+            thread_conn.write "\r\n"
+            thread_conn.write html
+            thread_conn.write("\r\n\r\n")
+            thread_conn.close
           end
         end
       end
@@ -201,7 +202,7 @@ describe Capybara::Webkit::Browser do
                         :user => @user,
                         :pass => @pass)
       browser.visit @url
-      @proxy_requests.size.should == 2
+      @proxy_requests.size.should eq 2
       @request = @proxy_requests[-1]
     end
 
@@ -211,7 +212,7 @@ describe Capybara::Webkit::Browser do
     end
 
     it 'uses the HTTP proxy correctly' do
-      @request[0].should match /^GET\s+http:\/\/example.org\/\s+HTTP/i
+      @request[0].should match(/^GET\s+http:\/\/example.org\/\s+HTTP/i)
       @request.find { |header|
         header =~ /^Host:\s+example.org$/i }.should_not be nil
     end
@@ -222,8 +223,8 @@ describe Capybara::Webkit::Browser do
       auth_header.should_not be nil
 
       user, pass = Base64.decode64(auth_header.split(/\s+/)[-1]).split(":")
-      user.should == @user
-      pass.should == @pass
+      user.should eq @user
+      pass.should eq @pass
     end
 
     it "uses the proxies' response" do
@@ -231,24 +232,24 @@ describe Capybara::Webkit::Browser do
     end
 
     it 'uses original URL' do
-      browser.current_url.should == @url
+      browser.current_url.should eq @url
     end
 
     it 'uses URLs changed by javascript' do
       browser.execute_script "window.history.pushState('', '', '/blah')"
-      browser.current_url.should == 'http://example.org/blah'
+      browser.current_url.should eq 'http://example.org/blah'
     end
 
     it 'is possible to disable proxy again' do
       @proxy_requests.clear
       browser.clear_proxy
       browser.visit "http://#{@host}:#{@port}/"
-      @proxy_requests.size.should == 0
+      @proxy_requests.size.should eq 0
     end
   end
 
   it "doesn't try to read an empty response" do
-    connection = stub("connection")
+    connection = double("connection")
     connection.stub(:puts)
     connection.stub(:print)
     connection.stub(:gets).and_return("ok\n", "0\n")
@@ -256,6 +257,20 @@ describe Capybara::Webkit::Browser do
 
     browser = Capybara::Webkit::Browser.new(connection)
 
-    expect { browser.visit("/") }.not_to raise_error(/empty response/)
+    expect { browser.visit("/") }.not_to raise_error
+  end
+
+  describe '#command' do
+    context 'non-ok response' do
+      it 'raises an error of given class' do
+        error_json = '{"class": "ClickFailed"}'
+
+        connection.should_receive(:gets).ordered.and_return 'error'
+        connection.should_receive(:gets).ordered.and_return error_json.bytesize
+        connection.stub read: error_json
+
+        expect { browser.command 'blah', 'meh' }.to raise_error(Capybara::Webkit::ClickFailed)
+      end
+    end
   end
 end

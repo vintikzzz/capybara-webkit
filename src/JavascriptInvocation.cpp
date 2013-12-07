@@ -5,14 +5,19 @@
 #include <QEvent>
 #include <QContextMenuEvent>
 
-JavascriptInvocation::JavascriptInvocation(const QString &functionName, const QStringList &arguments, WebPage *page, QObject *parent) : QObject(parent) {
+JavascriptInvocation::JavascriptInvocation(const QString &functionName, bool allowUnattached, const QStringList &arguments, WebPage *page, QObject *parent) : QObject(parent) {
   m_functionName = functionName;
+  m_allowUnattached = allowUnattached;
   m_arguments = arguments;
   m_page = page;
 }
 
 QString &JavascriptInvocation::functionName() {
   return m_functionName;
+}
+
+bool JavascriptInvocation::allowUnattached() {
+  return m_allowUnattached;
 }
 
 QStringList &JavascriptInvocation::arguments() {
@@ -39,40 +44,31 @@ InvocationResult JavascriptInvocation::invoke(QWebFrame *frame) {
 void JavascriptInvocation::leftClick(int x, int y) {
   QPoint mousePos(x, y);
 
-  hover(mousePos);
-  JavascriptInvocation::mouseEvent(QEvent::MouseButtonPress, mousePos, Qt::LeftButton);
-  JavascriptInvocation::mouseEvent(QEvent::MouseButtonRelease, mousePos, Qt::LeftButton);
+  m_page->mouseEvent(QEvent::MouseButtonPress, mousePos, Qt::LeftButton);
+  m_page->mouseEvent(QEvent::MouseButtonRelease, mousePos, Qt::LeftButton);
 }
 
 void JavascriptInvocation::rightClick(int x, int y) {
   QPoint mousePos(x, y);
 
-  hover(mousePos);
-  JavascriptInvocation::mouseEvent(QEvent::MouseButtonPress, mousePos, Qt::RightButton);
+  m_page->mouseEvent(QEvent::MouseButtonPress, mousePos, Qt::RightButton);
 
   // swallowContextMenuEvent tries to fire contextmenu event in html page
   QContextMenuEvent *event = new QContextMenuEvent(QContextMenuEvent::Mouse, mousePos);
   m_page->swallowContextMenuEvent(event);
 
-  JavascriptInvocation::mouseEvent(QEvent::MouseButtonRelease, mousePos, Qt::RightButton);
+  m_page->mouseEvent(QEvent::MouseButtonRelease, mousePos, Qt::RightButton);
 }
 
 void JavascriptInvocation::doubleClick(int x, int y) {
   QPoint mousePos(x, y);
 
-  JavascriptInvocation::mouseEvent(QEvent::MouseButtonDblClick, mousePos, Qt::LeftButton);
-  JavascriptInvocation::mouseEvent(QEvent::MouseButtonRelease, mousePos, Qt::LeftButton);
-}
-
-void JavascriptInvocation::mouseEvent(QEvent::Type type, const QPoint &position, Qt::MouseButton button) {
-  QMouseEvent event(type, position, button, button, Qt::NoModifier);
-  QApplication::sendEvent(m_page, &event);
+  m_page->mouseEvent(QEvent::MouseButtonDblClick, mousePos, Qt::LeftButton);
+  m_page->mouseEvent(QEvent::MouseButtonRelease, mousePos, Qt::LeftButton);
 }
 
 bool JavascriptInvocation::clickTest(QWebElement element, int absoluteX, int absoluteY) {
-  QPoint mousePos(absoluteX, absoluteY);
-  QWebHitTestResult res = m_page->mainFrame()->hitTestContent(mousePos);
-  return res.frame() == element.webFrame();
+  return m_page->clickTest(element, absoluteX, absoluteY);
 }
 
 QVariantMap JavascriptInvocation::clickPosition(QWebElement element, int left, int top, int width, int height) {
@@ -106,7 +102,7 @@ void JavascriptInvocation::hover(int absoluteX, int absoluteY) {
 }
 
 void JavascriptInvocation::hover(const QPoint &mousePos) {
-  mouseEvent(QEvent::MouseMove, mousePos, Qt::NoButton);
+  m_page->mouseEvent(QEvent::MouseMove, mousePos, Qt::NoButton);
 }
 
 int JavascriptInvocation::keyCodeFor(const QChar &key) {
@@ -138,4 +134,15 @@ void JavascriptInvocation::keypress(QChar key) {
   QApplication::sendEvent(m_page, &event);
   event = QKeyEvent(QKeyEvent::KeyRelease, keyCode, Qt::NoModifier, key);
   QApplication::sendEvent(m_page, &event);
+}
+
+const QString JavascriptInvocation::render(void) {
+  QString pathTemplate =
+    QDir::temp().absoluteFilePath("./click_failed_XXXXXX.png");
+  QTemporaryFile file(pathTemplate);
+  file.open();
+  file.setAutoRemove(false);
+  QString path = file.fileName();
+  m_page->render(path, QSize(1024, 768));
+  return path;
 }

@@ -10,6 +10,7 @@
 #include <iostream>
 #include <QWebSettings>
 #include <QUuid>
+#include <QApplication>
 
 WebPage::WebPage(WebPageManager *manager, QObject *parent) : QWebPage(parent) {
   m_loading = false;
@@ -142,14 +143,14 @@ bool WebPage::shouldInterruptJavaScript() {
   return false;
 }
 
-InvocationResult WebPage::invokeCapybaraFunction(const char *name, const QStringList &arguments) {
+InvocationResult WebPage::invokeCapybaraFunction(const char *name, bool allowUnattached, const QStringList &arguments) {
   QString qname(name);
-  JavascriptInvocation invocation(qname, arguments, this);
+  JavascriptInvocation invocation(qname, allowUnattached, arguments, this);
   return invocation.invoke(currentFrame());
 }
 
-InvocationResult WebPage::invokeCapybaraFunction(QString &name, const QStringList &arguments) {
-  return invokeCapybaraFunction(name.toLatin1().data(), arguments);
+InvocationResult WebPage::invokeCapybaraFunction(QString &name, bool allowUnattached, const QStringList &arguments) {
+  return invokeCapybaraFunction(name.toLatin1().data(), allowUnattached, arguments);
 }
 
 void WebPage::javaScriptConsoleMessage(const QString &message, int lineNumber, const QString &sourceID) {
@@ -214,6 +215,19 @@ QString WebPage::failureString() {
     return message + m_errorPageMessage;
 }
 
+void WebPage::mouseEvent(QEvent::Type type, const QPoint &position, Qt::MouseButton button) {
+  m_mousePosition = position;
+  QMouseEvent event(type, position, button, button, Qt::NoModifier);
+  QApplication::sendEvent(this, &event);
+}
+
+bool WebPage::clickTest(QWebElement element, int absoluteX, int absoluteY) {
+  QPoint mousePos(absoluteX, absoluteY);
+  m_mousePosition = mousePos;
+  QWebHitTestResult res = mainFrame()->hitTestContent(mousePos);
+  return res.frame() == element.webFrame();
+}
+
 bool WebPage::render(const QString &fileName, const QSize &minimumSize) {
   QFileInfo fileInfo(fileName);
   QDir dir;
@@ -236,6 +250,10 @@ bool WebPage::render(const QString &fileName, const QSize &minimumSize) {
 
   this->setViewportSize(pageSize);
   this->mainFrame()->render(&p);
+
+  QImage pointer = QImage(":/pointer.png");
+  p.drawImage(m_mousePosition, pointer);
+
   p.end();
   this->setViewportSize(viewportSize);
 

@@ -62,7 +62,8 @@ HEADERS = \
   FindCss.h \
   JavascriptCommand.h \
   FindXpath.h \
-  NetworkReplyProxy.h
+  NetworkReplyProxy.h \
+  IgnoreDebugOutput.h
 
 SOURCES = \
   Version.cpp \
@@ -126,7 +127,8 @@ SOURCES = \
   FindCss.cpp \
   JavascriptCommand.cpp \
   FindXpath.cpp \
-  NetworkReplyProxy.cpp
+  NetworkReplyProxy.cpp \
+  IgnoreDebugOutput.cpp
 
 RESOURCES = webkit_server.qrc
 QT += network
@@ -134,6 +136,11 @@ greaterThan(QT_MAJOR_VERSION, 4) {
   QT += webkitwidgets
 } else {
   QT += webkit
+}
+lessThan(QT_MAJOR_VERSION, 5) {
+  lessThan(QT_MINOR_VERSION, 8) {
+    error(At least Qt 4.8.0 is required to run capybara-webkit.)
+  }
 }
 CONFIG += console precompile_header
 CONFIG -= app_bundle

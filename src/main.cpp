@@ -1,4 +1,5 @@
 #include "Server.h"
+#include "IgnoreDebugOutput.h"
 #include <QApplication>
 #include <iostream>
 #ifdef Q_OS_UNIX
@@ -24,6 +25,7 @@ int main(int argc, char **argv) {
     port = args[1].toInt();
   }
 
+  ignoreDebugOutput();
   Server server(0);
 
   QObject::connect(&app, SIGNAL(aboutToQuit()), &server, SLOT(handleTermination()));
@@ -35,4 +37,3 @@ int main(int argc, char **argv) {
     return 1;
   }
 }
-

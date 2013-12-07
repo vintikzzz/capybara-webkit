@@ -16,8 +16,8 @@ class WebPage : public QWebPage {
 
   public:
     WebPage(WebPageManager *, QObject *parent = 0);
-    InvocationResult invokeCapybaraFunction(const char *name, const QStringList &arguments);
-    InvocationResult invokeCapybaraFunction(QString &name, const QStringList &arguments);
+    InvocationResult invokeCapybaraFunction(const char *name, bool allowUnattached, const QStringList &arguments);
+    InvocationResult invokeCapybaraFunction(QString &name, bool allowUnattached, const QStringList &arguments);
     QString failureString();
     QString userAgentForUrl(const QUrl &url ) const;
     void setUserAgent(QString userAgent);
@@ -44,6 +44,8 @@ class WebPage : public QWebPage {
     QStringList pageHeaders();
     QByteArray body();
     QString contentType();
+    void mouseEvent(QEvent::Type type, const QPoint &position, Qt::MouseButton button);
+    bool clickTest(QWebElement element, int absoluteX, int absoluteY);
 
   public slots:
     bool shouldInterruptJavaScript();
@@ -88,6 +90,7 @@ class WebPage : public QWebPage {
     WebPageManager *m_manager;
     QString m_errorPageMessage;
     void setFrameProperties(QWebFrame *, QUrl &, NetworkReplyProxy *);
+    QPoint m_mousePosition;
 };
 
 #endif //_WEBPAGE_H

@@ -7,7 +7,7 @@ Bundler::GemHelper.install_tasks
 
 desc "Generate a Makefile using qmake"
 file 'Makefile' do
-  CapybaraWebkitBuilder.makefile or exit(1)
+  CapybaraWebkitBuilder.makefile('CONFIG+=test') or exit(1)
 end
 
 desc "Regenerate dependencies using qmake"
@@ -20,6 +20,11 @@ task :build => :qmake do
   CapybaraWebkitBuilder.build or exit(1)
 end
 
+desc "Run QtTest unit tests for webkit server"
+task :check => :build do
+  sh("make check") or exit(1)
+end
+
 file 'bin/webkit_server' => :build
 
 RSpec::Core::RakeTask.new do |t|
@@ -27,15 +32,14 @@ RSpec::Core::RakeTask.new do |t|
   t.rspec_opts = "--format progress"
 end
 
+task :spec => :build
+
 desc "Default: build and run all specs"
-task :default => [:build, :spec]
+task :default => [:check, :spec]
 
 desc "Generate a new command called NAME"
 task :generate_command do
   name = ENV['NAME'] or raise "Provide a name with NAME="
-
-  header = "src/#{name}.h"
-  source = "src/#{name}.cpp"
 
   %w(h cpp).each do |extension|
     File.open("templates/Command.#{extension}", "r") do |source_file|

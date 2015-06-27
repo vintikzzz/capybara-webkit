@@ -15,11 +15,13 @@ module Capybara::Webkit
       @host    = options[:host] || '127.0.0.1'
       @timeout = options[:timeout] || 30
     end
-
+    def key
+      @host + @port.to_s
+    end
     def socket
       sockets = self.class.sockets
       s = nil
-      if(!sockets.key?(@port))
+      if(!sockets.key?(key))
         Timeout.timeout(@timeout) do
           while s.nil?
             begin
@@ -33,28 +35,45 @@ module Capybara::Webkit
             rescue Errno::ECONNREFUSED
             end
           end
-          sockets[@port] = s
+          sockets[key] = s
         end
       else
-        s = sockets[@port]
+        s = sockets[key]
       end
       s
     end
 
+    def with_retry
+      tries ||= 3
+      yield(socket)
+    rescue Errno::EPIPE => e
+      sockets = self.class.sockets
+      sockets.delete(key)
+      retry unless (tries -= 1).zero?
+    end
+
     def puts(string)
-      socket.puts string
+      with_retry do |s|
+        s.puts string
+      end
     end
 
     def print(string)
-      socket.print string
+      with_retry do |s|
+        s.print string
+      end
     end
 
     def gets
-      socket.gets
+      with_retry do |s|
+        s.gets
+      end
     end
 
     def read(length)
-      socket.read(length)
+      with_retry do |s|
+        socket.read(length)
+      end
     end
   end
 end

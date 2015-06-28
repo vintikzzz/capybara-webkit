@@ -1,5 +1,6 @@
 #ifndef _WEBPAGE_H
 #define _WEBPAGE_H
+#include <QtGlobal>
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QtWebKitWidgets>
 #else
@@ -10,6 +11,7 @@
 class WebPageManager;
 class InvocationResult;
 class NetworkReplyProxy;
+class QWebView;
 
 class WebPage : public QWebPage {
   Q_OBJECT
@@ -22,8 +24,12 @@ class WebPage : public QWebPage {
     QString userAgentForUrl(const QUrl &url ) const;
     void setUserAgent(QString userAgent);
     void setConfirmAction(QString action);
+    QString setConfirmAction(QString action, QString message);
+    QString setPromptAction(QString action, QString message, QString response);
+    QString setPromptAction(QString action, QString message);
     void setPromptAction(QString action);
     void setPromptText(QString action);
+    QString acceptAlert(QString);
     int getLastStatus();
     void setCustomNetworkAccessManager();
     bool render(const QString &fileName, const QSize &minimumSize);
@@ -33,7 +39,7 @@ class WebPage : public QWebPage {
     QVariantList alertMessages();
     QVariantList confirmMessages();
     QVariantList promptMessages();
-    void resetWindowSize();
+    void createWindow();
     void resetLocalStorage();
     QWebPage *createWindow(WebWindowType type);
     QString uuid();
@@ -41,11 +47,14 @@ class WebPage : public QWebPage {
     bool matchesWindowSelector(QString);
     void setFocus();
     void unsupportedContentFinishedReply(QNetworkReply *reply);
-    QStringList pageHeaders();
+    QVariantMap pageHeaders();
     QByteArray body();
     QString contentType();
     void mouseEvent(QEvent::Type type, const QPoint &position, Qt::MouseButton button);
     bool clickTest(QWebElement element, int absoluteX, int absoluteY);
+    void resize(int, int);
+    int modalCount();
+    QString modalMessage();
 
   public slots:
     bool shouldInterruptJavaScript();
@@ -57,11 +66,13 @@ class WebPage : public QWebPage {
     void handleSslErrorsForReply(QNetworkReply *reply, const QList<QSslError> &);
     void handleUnsupportedContent(QNetworkReply *reply);
     void replyFinished(QUrl &, QNetworkReply *);
+    void remove();
 
   signals:
     void pageFinished(bool);
     void requestCreated(QByteArray &url, QNetworkReply *reply);
     void replyFinished(QNetworkReply *reply);
+    void modalReady();
 
   protected:
     virtual void javaScriptConsoleMessage(const QString &message, int lineNumber, const QString &sourceID);
@@ -79,8 +90,8 @@ class WebPage : public QWebPage {
     QStringList getAttachedFileNames();
     void loadJavascript();
     void setUserStylesheet();
-    bool m_confirm;
-    bool m_prompt;
+    bool m_confirmAction;
+    bool m_promptAction;
     QVariantList m_consoleMessages;
     QVariantList m_alertMessages;
     QVariantList m_confirmMessages;
@@ -91,6 +102,9 @@ class WebPage : public QWebPage {
     QString m_errorPageMessage;
     void setFrameProperties(QWebFrame *, QUrl &, NetworkReplyProxy *);
     QPoint m_mousePosition;
+    QList<QVariantMap> m_modalResponses;
+    QStringList m_modalMessages;
+    void addModalMessage(bool, const QString &, const QRegExp &);
 };
 
 #endif //_WEBPAGE_H

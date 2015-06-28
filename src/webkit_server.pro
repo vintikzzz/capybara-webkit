@@ -1,7 +1,24 @@
 TEMPLATE = app
 TARGET = webkit_server
 DESTDIR = .
+PROJECT_DIR = $$_PRO_FILE_PWD_
+BUILD_DIR = $${PROJECT_DIR}/build
+PRECOMPILED_DIR = $${BUILD_DIR}
+OBJECTS_DIR = $${BUILD_DIR}
+MOC_DIR = $${BUILD_DIR}
 HEADERS = \
+  BlockUrl.h \
+  AllowUrl.h \
+  SetUnknownUrlMode.h \
+  FindModal.h \
+  AcceptAlert.h \
+  GoForward.h \
+  GoBack.h \
+  WindowMaximize.h \
+  WindowSize.h \
+  WindowCommand.h \
+  WindowOpen.h \
+  WindowClose.h \
   Version.h \
   EnableLogging.h \
   Authenticate.h \
@@ -13,7 +30,7 @@ HEADERS = \
   JavascriptConfirmMessages.h \
   JavascriptPromptMessages.h \
   IgnoreSslErrors.h \
-  ResizeWindow.h \
+  WindowResize.h \
   CurrentUrl.h \
   ConsoleMessages.h \
   WebPage.h \
@@ -63,9 +80,28 @@ HEADERS = \
   JavascriptCommand.h \
   FindXpath.h \
   NetworkReplyProxy.h \
-  IgnoreDebugOutput.h
+  IgnoreDebugOutput.h \
+  StdinNotifier.h \
+  RequestHandler.h \
+  BlacklistedRequestHandler.h \
+  MissingContentHeaderRequestHandler.h \
+  CustomHeadersRequestHandler.h \
+  NetworkRequestFactory.h \
+  UnknownUrlHandler.h
 
 SOURCES = \
+  BlockUrl.cpp \
+  AllowUrl.cpp \
+  SetUnknownUrlMode.cpp \
+  FindModal.cpp \
+  AcceptAlert.cpp \
+  GoForward.cpp \
+  GoBack.cpp \
+  WindowMaximize.cpp \
+  WindowSize.cpp \
+  WindowCommand.cpp \
+  WindowOpen.cpp \
+  WindowClose.cpp \
   Version.cpp \
   EnableLogging.cpp \
   Authenticate.cpp \
@@ -77,7 +113,7 @@ SOURCES = \
   JavascriptConfirmMessages.cpp \
   JavascriptPromptMessages.cpp \
   IgnoreSslErrors.cpp \
-  ResizeWindow.cpp \
+  WindowResize.cpp \
   CurrentUrl.cpp \
   ConsoleMessages.cpp \
   main.cpp \
@@ -128,7 +164,14 @@ SOURCES = \
   JavascriptCommand.cpp \
   FindXpath.cpp \
   NetworkReplyProxy.cpp \
-  IgnoreDebugOutput.cpp
+  IgnoreDebugOutput.cpp \
+  StdinNotifier.cpp \
+  RequestHandler.cpp \
+  BlacklistedRequestHandler.cpp \
+  MissingContentHeaderRequestHandler.cpp \
+  CustomHeadersRequestHandler.cpp \
+  NetworkRequestFactory.cpp \
+  UnknownUrlHandler.cpp
 
 RESOURCES = webkit_server.qrc
 QT += network

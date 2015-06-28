@@ -2,13 +2,17 @@ require "capybara"
 
 module Capybara
   module Webkit
+    def self.configure(&block)
+      Capybara::Webkit::Configuration.modify(&block)
+    end
   end
 end
 
 require "capybara/webkit/driver"
+require "capybara/webkit/configuration"
 
 Capybara.register_driver :webkit do |app|
-  Capybara::Webkit::Driver.new(app)
+  Capybara::Webkit::Driver.new(app, Capybara::Webkit::Configuration.to_hash)
 end
 Capybara.register_driver :permanent_webkit do |app|
   ENV['WEBKIT_PORT'] ||= '40000'
@@ -19,7 +23,8 @@ Capybara.register_driver :permanent_webkit do |app|
 end
 
 Capybara.register_driver :webkit_debug do |app|
-  driver = Capybara::Webkit::Driver.new(app)
-  driver.enable_logging
-  driver
+  Capybara::Webkit::Driver.new(
+    app,
+    Capybara::Webkit::Configuration.to_hash.merge(debug: true)
+  )
 end

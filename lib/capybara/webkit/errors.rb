@@ -17,6 +17,18 @@ module Capybara::Webkit
   class TimeoutError < Timeout::Error
   end
 
+  class NoSuchWindowError < StandardError
+  end
+
+  class ConnectionError < StandardError
+  end
+
+  class ModalNotFound < StandardError
+  end
+
+  class CrashError < StandardError
+  end
+
   class JsonError
     def initialize(response)
       error = JSON.parse response

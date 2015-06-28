@@ -1,3 +1,60 @@
+New for 1.6.0:
+
+* New, easier, global configuration API.
+* Add `page.driver.allow_unknown_urls` to silent all unknown host warnings.
+* Add warning for users on Qt 4.
+* Fix bug when parsing response headers with values containing colons.
+* Allow multiple, different basic authorizations in a single session.
+* Caches behave more like Selenium
+* Select tag events behave more like Selenium
+* Deprecated `driver.browser`
+* Provide better behavior and information when the driver crashes
+
+New for 1.5.2:
+
+* Fixes bug where aborted Ajax requests caused a crash during reset.
+
+New for 1.5.1:
+
+* Fixes bug where Ajax requests would continue after a reset, causing native
+  alerts to appear for some users and crashes for others.
+
+New for 1.5.0:
+
+* Fixes for OpenBSD
+* Disable web page and object memory cache
+
+New for 1.4.1:
+
+* Do not consider data URIs unknown.
+* Make sure webkit_server process runs in background.
+
+New for 1.4.0:
+
+* Fix returning invisible text on a hidden page
+* Expose INCLUDEPATH and LIBS qmake variables
+* Drop support for older Capybara versions
+* Introduce allowed, blocked URL filters
+
+New for 1.3.1:
+
+* Inherit from Capybara::Driver::Base for Capybara 2.4.4 compatibility.
+* Fix a bug in the modal API which could cause an incorrect modal to be found.
+
+New for 1.3.0:
+
+* Capybara 2.4 compatibility.
+* Raise better errors if server fails to start
+* Offline application cache support.
+* Wildcard URL blacklist support.
+
+New for 1.2.0:
+* Capybara 2.3 compatibility.
+* Kill webkit_server when parent process closes stdin.
+
+New for 1.1.1:
+* Lock capybara dependency to < 2.2.0.
+
 New for 1.1.0:
 
 * Improve messages for ClickFailed errors to aid debugging.

@@ -66,10 +66,13 @@ Capybara = {
   text: function (index) {
     var node = this.getNode(index);
     var type = (node.type || node.tagName).toLowerCase();
-    if (type == "textarea") {
+    if (!this.isNodeVisible(node)) {
+      return '';
+    } else if (type == "textarea") {
       return node.innerHTML;
     } else {
-      return node.innerText || node.textContent;
+      visible_text = node.innerText;
+      return typeof visible_text === "string" ? visible_text : node.textContent;
     }
   },
 
@@ -225,9 +228,13 @@ Capybara = {
   },
 
   trigger: function (index, eventName) {
+    this.triggerOnNode(this.getNode(index), eventName);
+  },
+
+  triggerOnNode: function(node, eventName) {
     var eventObject = document.createEvent("HTMLEvents");
     eventObject.initEvent(eventName, true, true);
-    this.getNode(index).dispatchEvent(eventObject);
+    node.dispatchEvent(eventObject);
   },
 
   visible: function (index) {
@@ -270,8 +277,6 @@ Capybara = {
     textTypes = ["email", "number", "password", "search", "tel", "text", "textarea", "url"];
 
     if (textTypes.indexOf(type) != -1) {
-      this.focus(index);
-
       maxLength = this.attribute(index, "maxlength");
       if (maxLength && value.length > maxLength) {
         length = maxLength;
@@ -279,24 +284,41 @@ Capybara = {
         length = value.length;
       }
 
-      if (!node.readOnly)
+      if (!node.readOnly) {
+        this.focus(index);
+
         node.value = "";
 
-      for (strindex = 0; strindex < length; strindex++) {
-        CapybaraInvocation.keypress(value[strindex]);
-      }
+        for (strindex = 0; strindex < length; strindex++) {
+          CapybaraInvocation.keypress(value[strindex]);
+        }
 
+        if (value == '')
+          this.trigger(index, "change");
+      }
     } else if (type === "checkbox" || type === "radio") {
       if (node.checked != (value === "true")) {
         this.leftClick(index);
       }
-
     } else if (type === "file") {
       this.attachedFiles = Array.prototype.slice.call(arguments, 1);
       this.leftClick(index);
-
+    } else if (this.isContentEditable(node)) {
+      var content = document.createTextNode(value);
+      node.innerHTML = '';
+      node.appendChild(content);
     } else {
       node.value = value;
+    }
+  },
+
+  isContentEditable: function(node) {
+    if (node.contentEditable == 'true') {
+      return true;
+    } else if (node.contentEditable == 'false') {
+      return false;
+    } else if (node.contentEditable == 'inherit') {
+      return this.isContentEditable(node.parentNode);
     }
   },
 
@@ -305,8 +327,21 @@ Capybara = {
   },
 
   selectOption: function(index) {
-    this.getNode(index).selected = true;
-    this.trigger(index, "change");
+    var optionNode = this.getNode(index);
+    var selectNode = optionNode.parentNode;
+
+    // click on select list
+    this.triggerOnNode(selectNode, 'mousedown');
+    selectNode.focus();
+    this.triggerOnNode(selectNode, 'mouseup');
+    this.triggerOnNode(selectNode, 'click');
+
+    // select option from list
+    this.triggerOnNode(optionNode, 'mousedown');
+    optionNode.selected = true;
+    this.triggerOnNode(selectNode, 'change');
+    this.triggerOnNode(optionNode, 'mouseup');
+    this.triggerOnNode(optionNode, 'click');
   },
 
   unselectOption: function(index) {

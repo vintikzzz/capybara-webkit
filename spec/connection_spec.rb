@@ -2,6 +2,67 @@ require 'spec_helper'
 require 'capybara/webkit/connection'
 
 describe Capybara::Webkit::Connection do
+  it "kills the process when the parent process dies", skip_on_windows: true, skip_on_jruby: true do
+    read_io, write_io = IO.pipe
+
+    fork_pid = fork do
+      read_io.close
+      connection = Capybara::Webkit::Connection.new
+      write_io.write(connection.pid)
+      write_io.close
+      Process.wait(connection.pid)
+    end
+
+    write_io.close
+
+    webkit_pid = read_io.read.to_i
+    webkit_pid.should be > 1
+    read_io.close
+    Process.kill(9, fork_pid)
+    eventually { expect { Process.getpgid(webkit_pid) }.to raise_error Errno::ESRCH }
+  end
+
+  def eventually
+    polling_interval = 0.1
+    time_limit = Time.now + 3
+    loop do
+      begin
+        yield
+        return
+      rescue RSpec::Expectations::ExpectationNotMetError => error
+        raise error if Time.now >= time_limit
+        sleep polling_interval
+      end
+    end
+  end
+
+  it "raises an error if the server has stopped", skip_on_windows: true do
+    path = 'false'
+    stub_const("Capybara::Webkit::Connection::SERVER_PATH", path)
+
+    expect { Capybara::Webkit::Connection.new }.
+      to raise_error(
+        Capybara::Webkit::ConnectionError,
+        "#{path} failed to start.")
+  end
+
+  it "raises an error if the server is not ready", skip_on_windows: true do
+    server_path = 'sleep 1'
+    stub_const("Capybara::Webkit::Connection::SERVER_PATH", server_path)
+    start_timeout = 0.5
+    stub_const("Capybara::Webkit::Connection::WEBKIT_SERVER_START_TIMEOUT", start_timeout)
+
+    error_string =
+      if defined?(::JRUBY_VERSION)
+        "#{server_path} failed to start."
+      else
+        "#{server_path} failed to start after #{start_timeout} seconds."
+      end
+
+    expect { Capybara::Webkit::Connection.new }.
+      to raise_error(Capybara::Webkit::ConnectionError, error_string)
+  end
+
   it "boots a server to talk to" do
     url = "http://#{@rack_server.host}:#{@rack_server.port}/"
     connection.puts "Visit"
@@ -19,17 +80,18 @@ describe Capybara::Webkit::Connection do
   end
 
   it 'forwards stderr to the given IO object' do
-    io = StringIO.new
-    redirected_connection = Capybara::Webkit::Connection.new(:stderr => io)
-    script = 'console.log("hello world")'
+    read_io, write_io = IO.pipe
+    redirected_connection = Capybara::Webkit::Connection.new(:stderr => write_io)
     redirected_connection.puts "EnableLogging"
     redirected_connection.puts 0
+
+    script = 'console.log("hello world")'
     redirected_connection.puts "Execute"
     redirected_connection.puts 1
     redirected_connection.puts script.to_s.bytesize
     redirected_connection.print script
-    sleep(0.5)
-    io.string.should =~ /hello world $/
+
+    expect(read_io).to include_response "\nhello world"
   end
 
   it 'does not forward stderr to nil' do

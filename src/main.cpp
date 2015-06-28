@@ -1,5 +1,6 @@
 #include "Server.h"
 #include "IgnoreDebugOutput.h"
+#include "StdinNotifier.h"
 #include <QApplication>
 #include <iostream>
 #ifdef Q_OS_UNIX
@@ -24,6 +25,9 @@ int main(int argc, char **argv) {
   {
     port = args[1].toInt();
   }
+
+  StdinNotifier notifier;
+  QObject::connect(&notifier, SIGNAL(eof()), &app, SLOT(quit()));
 
   ignoreDebugOutput();
   Server server(0);

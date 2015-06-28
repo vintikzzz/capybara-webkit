@@ -3,12 +3,17 @@
 require 'spec_helper'
 require 'capybara/webkit/driver'
 require 'base64'
+require 'self_signed_ssl_cert'
 
 describe Capybara::Webkit::Driver do
   include AppRunner
 
-  def visit(url, driver=driver)
-    driver.visit("#{AppRunner.app_host}#{url}")
+  def visit(path, driver=self.driver)
+    driver.visit(url(path))
+  end
+
+  def url(path)
+    "#{AppRunner.app_host}#{path}"
   end
 
   context "iframe app" do
@@ -341,6 +346,9 @@ describe Capybara::Webkit::Driver do
             <div id="hidden-text">
               Some of this text is <em style="display:none">hidden!</em>
             </div>
+            <div id="hidden-ancestor" style="display: none">
+              <div>Hello</div>
+            </div>
             <input type="text" disabled="disabled"/>
             <input id="checktest" type="checkbox" checked="checked"/>
             <script type="text/javascript">
@@ -352,6 +360,12 @@ describe Capybara::Webkit::Driver do
     end
 
     before { visit("/") }
+
+    it "doesn't return text if the ancestor is hidden" do
+      visit("/")
+
+      driver.find_css("#hidden-ancestor div").first.text.should eq ''
+    end
 
     it "handles anchor tags" do
       visit("#test")
@@ -552,6 +566,24 @@ describe Capybara::Webkit::Driver do
     end
   end
 
+  context "hidden text app" do
+    let(:driver) do
+      driver_for_html(<<-HTML)
+        <html>
+          <body>
+            <h1 style="display: none">Hello</h1>
+          </body>
+        </html>
+      HTML
+    end
+
+    before { visit("/") }
+
+    it "has no visible text" do
+      driver.find_xpath("/html").first.text.should be_empty
+    end
+  end
+
   context "console messages app" do
     let(:driver) do
       driver_for_html(<<-HTML)
@@ -609,30 +641,169 @@ describe Capybara::Webkit::Driver do
   end
 
   context "javascript dialog interaction" do
+    before do
+      stub_const('Capybara::ModalNotFound', Class.new(StandardError))
+    end
+
     context "on an alert app" do
       let(:driver) do
-        driver_for_html(<<-HTML)
-          <html>
-            <head>
-            </head>
-            <body>
-              <script type="text/javascript">
-                alert("Alert Text\\nGoes Here");
-              </script>
-            </body>
-          </html>
-        HTML
+        driver_for_app do
+          get '/' do
+            <<-HTML
+              <html>
+                <head>
+                </head>
+                <body>
+                  <script type="text/javascript">
+                    alert("Alert Text\\nGoes Here");
+                  </script>
+                </body>
+              </html>
+            HTML
+          end
+
+          get '/async' do
+            <<-HTML
+              <html>
+                <head>
+                </head>
+                <body>
+                  <script type="text/javascript">
+                    function testAlert() {
+                      setTimeout(function() { alert("Alert Text\\nGoes Here"); },
+                        #{params[:sleep] || 100});
+                    }
+                  </script>
+                  <input type="button" onclick="testAlert()" name="test"/>
+                </body>
+              </html>
+            HTML
+          end
+
+          get '/ajax' do
+            <<-HTML
+              <html>
+                <head>
+                </head>
+                <body>
+                  <script type="text/javascript">
+                    function testAlert() {
+                      var xhr = new XMLHttpRequest();
+                      xhr.open('GET', '/slow', true);
+                      xhr.setRequestHeader('Content-Type', 'text/plain');
+                      xhr.onreadystatechange = function () {
+                        if (xhr.readyState == 4) {
+                          alert('From ajax');
+                        }
+                      };
+                      xhr.send();
+                    }
+                  </script>
+                  <input type="button" onclick="testAlert()" name="test"/>
+                </body>
+              </html>
+            HTML
+          end
+
+          get '/double' do
+            <<-HTML
+              <html>
+                <head>
+                </head>
+                <body>
+                  <script type="text/javascript">
+                    alert('First alert'); 
+                  </script>
+                  <input type="button" onclick="alert('Second alert')" name="test"/>
+                </body>
+              </html>
+            HTML
+          end
+
+          get '/slow' do
+            sleep 0.5
+            ""
+          end
+        end
       end
 
-      before { visit("/") }
+      it 'accepts any alert modal if no match is provided' do
+        alert_message = driver.accept_modal(:alert) do
+          visit("/")
+        end
+        alert_message.should eq "Alert Text\nGoes Here"
+      end
+
+      it 'accepts an alert modal if it matches' do
+        alert_message = driver.accept_modal(:alert, text: "Alert Text\nGoes Here") do
+          visit("/")
+        end
+        alert_message.should eq "Alert Text\nGoes Here"
+      end
+
+      it 'raises an error when accepting an alert modal that does not match' do
+        expect {
+          driver.accept_modal(:alert, text: 'No?') do
+            visit('/')
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with No?"
+      end
+
+      it 'finds two alert windows in a row' do
+        driver.accept_modal(:alert, text: 'First alert') do 
+          visit('/double')
+        end
+
+        expect {
+          driver.accept_modal(:alert, text: 'Boom') do 
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with Boom"
+      end
+
+      it 'waits to accept an async alert modal' do
+        visit("/async")
+        alert_message = driver.accept_modal(:alert) do
+          driver.find_xpath("//input").first.click
+        end
+        alert_message.should eq "Alert Text\nGoes Here"
+      end
+
+      it 'times out waiting for an async alert modal' do
+        visit("/async?sleep=1000")
+        expect {
+          driver.accept_modal(:alert, wait: 0.1) do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Timed out waiting for modal dialog"
+      end
+
+      it 'raises an error when an unexpected modal is displayed' do
+        expect {
+          driver.accept_modal(:confirm) do
+            visit("/")
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog"
+      end
 
       it "should let me read my alert messages" do
+        visit("/")
         driver.alert_messages.first.should eq "Alert Text\nGoes Here"
       end
 
       it "empties the array when reset" do
+        visit("/")
         driver.reset!
         driver.alert_messages.should be_empty
+      end
+
+      it "clears alerts from ajax requests in between sessions" do
+        visit("/ajax")
+        driver.find("//input").first.click
+        driver.reset!
+        sleep 0.5
+        driver.alert_messages.should eq([])
+        expect { visit("/") }.not_to raise_error
       end
     end
 
@@ -650,14 +821,106 @@ describe Capybara::Webkit::Driver do
                   else
                     console.log("goodbye");
                 }
+                function test_complex_dialog() {
+                  if(confirm("Yes?"))
+                    if(confirm("Really?"))
+                      console.log("hello");
+                  else
+                    console.log("goodbye");
+                }
+                function test_async_dialog() {
+                  setTimeout(function() {
+                    if(confirm("Yes?"))
+                      console.log("hello");
+                    else
+                      console.log("goodbye");
+                  }, 100);
+                }
               </script>
               <input type="button" onclick="test_dialog()" name="test"/>
+              <input type="button" onclick="test_complex_dialog()" name="test_complex"/>
+              <input type="button" onclick="test_async_dialog()" name="test_async"/>
             </body>
           </html>
         HTML
       end
 
       before { visit("/") }
+
+      it 'accepts any confirm modal if no match is provided' do
+        driver.accept_modal(:confirm) do
+          driver.find_xpath("//input").first.click
+        end
+        driver.console_messages.first[:message].should eq "hello"
+      end
+
+      it 'dismisses a confirm modal that does not match' do
+        begin
+          driver.accept_modal(:confirm, text: 'No?') do
+            driver.find_xpath("//input").first.click
+            driver.console_messages.first[:message].should eq "goodbye"
+          end
+        rescue Capybara::ModalNotFound
+        end
+      end
+
+      it 'raises an error when accepting a confirm modal that does not match' do
+        expect {
+          driver.accept_modal(:confirm, text: 'No?') do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with No?"
+      end
+
+      it 'dismisses any confirm modal if no match is provided' do
+        driver.dismiss_modal(:confirm) do
+          driver.find_xpath("//input").first.click
+        end
+        driver.console_messages.first[:message].should eq "goodbye"
+      end
+
+      it 'raises an error when dismissing a confirm modal that does not match' do
+        expect {
+          driver.dismiss_modal(:confirm, text: 'No?') do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with No?"
+      end
+
+      it 'waits to accept an async confirm modal' do
+        visit("/async")
+        confirm_message = driver.accept_modal(:confirm) do
+          driver.find_css("input[name=test_async]").first.click
+        end
+        confirm_message.should eq "Yes?"
+      end
+
+      it 'allows the nesting of dismiss and accept' do
+        driver.dismiss_modal(:confirm) do
+          driver.accept_modal(:confirm) do
+            driver.find_css("input[name=test_complex]").first.click
+          end
+        end
+        driver.console_messages.first[:message].should eq "goodbye"
+      end
+
+      it 'raises an error when an unexpected modal is displayed' do
+        expect {
+          driver.accept_modal(:prompt) do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog"
+      end
+
+      it 'dismisses a confirm modal when prompt is expected' do
+        begin
+          driver.accept_modal(:prompt) do
+            driver.find_xpath("//input").first.click
+            driver.console_messages.first[:message].should eq "goodbye"
+          end
+        rescue Capybara::ModalNotFound
+        end
+      end
 
       it "should default to accept the confirm" do
         driver.find_xpath("//input").first.click
@@ -718,14 +981,111 @@ describe Capybara::Webkit::Driver do
                   else
                     console.log("goodbye");
                 }
+                function test_complex_dialog() {
+                  var response = prompt("Your name?", "John Smith");
+                  if(response != null)
+                    if(prompt("Your age?"))
+                      console.log("hello " + response);
+                  else
+                    console.log("goodbye");
+                }
+                function test_async_dialog() {
+                  setTimeout(function() {
+                    var response = prompt("Your name?", "John Smith");
+                  }, 100);
+                }
               </script>
               <input type="button" onclick="test_dialog()" name="test"/>
+              <input type="button" onclick="test_complex_dialog()" name="test_complex"/>
+              <input type="button" onclick="test_async_dialog()" name="test_async"/>
             </body>
           </html>
         HTML
       end
 
       before { visit("/") }
+
+      it 'accepts any prompt modal if no match is provided' do
+        driver.accept_modal(:prompt) do
+          driver.find_xpath("//input").first.click
+        end
+        driver.console_messages.first[:message].should eq "hello John Smith"
+      end
+
+      it 'accepts any prompt modal with the provided response' do
+        driver.accept_modal(:prompt, with: 'Capy') do
+          driver.find_xpath("//input").first.click
+        end
+        driver.console_messages.first[:message].should eq "hello Capy"
+      end
+
+      it 'raises an error when accepting a prompt modal that does not match' do
+        expect {
+          driver.accept_modal(:prompt, text: 'Your age?') do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with Your age?"
+      end
+
+      it 'dismisses any prompt modal if no match is provided' do
+        driver.dismiss_modal(:prompt) do
+          driver.find_xpath("//input").first.click
+        end
+        driver.console_messages.first[:message].should eq "goodbye"
+      end
+
+      it 'dismisses a prompt modal that does not match' do
+        begin
+          driver.accept_modal(:prompt, text: 'Your age?') do
+            driver.find_xpath("//input").first.click
+            driver.console_messages.first[:message].should eq "goodbye"
+          end
+        rescue Capybara::ModalNotFound
+        end
+      end
+
+      it 'raises an error when dismissing a prompt modal that does not match' do
+        expect {
+          driver.dismiss_modal(:prompt, text: 'Your age?') do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with Your age?"
+      end
+
+      it 'waits to accept an async prompt modal' do
+        visit("/async")
+        prompt_message = driver.accept_modal(:prompt) do
+          driver.find_css("input[name=test_async]").first.click
+        end
+        prompt_message.should eq "Your name?"
+      end
+
+      it 'allows the nesting of dismiss and accept' do
+        driver.dismiss_modal(:prompt) do
+          driver.accept_modal(:prompt) do
+            driver.find_css("input[name=test_complex]").first.click
+          end
+        end
+        driver.console_messages.first[:message].should eq "goodbye"
+      end
+
+      it 'raises an error when an unexpected modal is displayed' do
+        expect {
+          driver.accept_modal(:confirm) do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog"
+      end
+
+      it 'dismisses a prompt modal when confirm is expected' do
+        begin
+          driver.accept_modal(:confirm) do
+            driver.find_xpath("//input").first.click
+            driver.console_messages.first[:message].should eq "goodbye"
+          end
+        rescue Capybara::ModalNotFound
+        end
+      end
 
       it "should default to dismiss the prompt" do
         driver.find_xpath("//input").first.click
@@ -1081,7 +1441,7 @@ describe Capybara::Webkit::Driver do
             <input class="watch" type="password"/>
             <input class="watch" type="search"/>
             <input class="watch" type="tel"/>
-            <input class="watch" type="text"/>
+            <input class="watch" type="text" value="original"/>
             <input class="watch" type="url"/>
             <textarea class="watch"></textarea>
             <input class="watch" type="checkbox"/>
@@ -1117,7 +1477,7 @@ describe Capybara::Webkit::Driver do
 
     before { visit("/") }
 
-    let(:newtext) { 'newvalue' }
+    let(:newtext) { '12345' }
 
     let(:keyevents) do
       (%w{focus} +
@@ -1125,11 +1485,20 @@ describe Capybara::Webkit::Driver do
       ).flatten
     end
 
+    let(:textevents) { keyevents + %w(change blur) }
+
     %w(email number password search tel text url).each do | field_type |
       it "triggers text input events on inputs of type #{field_type}" do
         driver.find_xpath("//input[@type='#{field_type}']").first.set(newtext)
-        driver.find_xpath("//li").map(&:visible_text).should eq keyevents
+        driver.find_xpath("//body").first.click
+        driver.find_xpath("//li").map(&:visible_text).should eq textevents
       end
+    end
+
+    it "triggers events for cleared inputs" do
+      driver.find_xpath("//input[@type='text']").first.set('')
+      driver.find_xpath("//body").first.click
+      driver.find_xpath("//li").map(&:visible_text).should include('change')
     end
 
     it "triggers textarea input events" do
@@ -1440,7 +1809,7 @@ describe Capybara::Webkit::Driver do
 
   context "no response app" do
     let(:driver) do
-      driver_for_html(<<-HTML)
+      driver_for_html(<<-HTML, browser: browser)
         <html><body>
           <form action="/error"><input type="submit"/></form>
         </body></html>
@@ -1459,16 +1828,19 @@ describe Capybara::Webkit::Driver do
     end
 
     def make_the_server_come_back
-      driver.browser.instance_variable_get(:@connection).unstub(:gets)
-      driver.browser.instance_variable_get(:@connection).unstub(:puts)
-      driver.browser.instance_variable_get(:@connection).unstub(:print)
+      connection.unstub(:gets)
+      connection.unstub(:puts)
+      connection.unstub(:print)
     end
 
     def make_the_server_go_away
-      driver.browser.instance_variable_get(:@connection).stub(:gets).and_return(nil)
-      driver.browser.instance_variable_get(:@connection).stub(:puts)
-      driver.browser.instance_variable_get(:@connection).stub(:print)
+      connection.stub(:gets).and_return(nil)
+      connection.stub(:puts)
+      connection.stub(:print)
     end
+
+    let(:browser) { Capybara::Webkit::Browser.new(connection) }
+    let(:connection) { Capybara::Webkit::Connection.new }
   end
 
   context "custom font app" do
@@ -1538,30 +1910,21 @@ describe Capybara::Webkit::Driver do
     end
 
     it "uses a custom cookie" do
-      driver.browser.set_cookie 'cookie=abc; domain=127.0.0.1; path=/'
+      driver.set_cookie 'cookie=abc; domain=127.0.0.1; path=/'
       visit "/"
       echoed_cookie.should eq "abc"
     end
 
     it "clears cookies" do
-      driver.browser.clear_cookies
+      driver.clear_cookies
       visit "/"
       echoed_cookie.should eq ""
     end
 
-    it "allows enumeration of cookies" do
-      cookies = driver.browser.get_cookies
-
-      cookies.size.should eq 1
-
-      cookie = Hash[cookies[0].split(/\s*;\s*/).map { |x| x.split("=", 2) }]
-      cookie["cookie"].should eq "abc"
-      cookie["domain"].should include "127.0.0.1"
-      cookie["path"].should eq "/"
-    end
-
-    it "allows reading access to cookies using a nice syntax" do
+    it "allows reading cookies" do
       driver.cookies["cookie"].should eq "abc"
+      driver.cookies.find("cookie").path.should eq "/"
+      driver.cookies.find("cookie").domain.should include "127.0.0.1"
     end
   end
 
@@ -1745,6 +2108,102 @@ describe Capybara::Webkit::Driver do
     end
   end
 
+  context "caching app" do
+    let(:driver) do
+      etag_value = SecureRandom.hex
+
+      driver_for_app do
+        get '/' do
+          etag etag_value
+          <<-HTML
+            <html>
+              <body>
+                Expected body
+              </body>
+            </html>
+          HTML
+        end
+      end
+    end
+
+    it "returns a body for cached responses" do
+      visit '/'
+      first = driver.html
+      visit '/'
+      second = driver.html
+      expect(second).to eq(first)
+    end
+  end
+
+  context "offline application cache" do
+    let(:driver) do
+      @visited = []
+      visited = @visited
+
+      driver_for_app do
+        get '/8d853f09-4275-409d-954d-ebbf6e2ce732' do
+          content_type 'text/cache-manifest'
+          visited << 'manifest'
+          <<-TEXT
+CACHE MANIFEST
+/4aaffa31-f42d-403e-a19e-6b248d608087
+          TEXT
+        end
+
+        # UUID urls so that this gets isolated from other tests
+        get '/f8742c39-8bef-4196-b1c3-80f8a3d65f3e' do
+          visited << 'complex'
+          <<-HTML
+            <html manifest="/8d853f09-4275-409d-954d-ebbf6e2ce732">
+              <body>
+                <span id='state'></span>
+                <span id='finished'></span>
+                <script type="text/javascript">
+                  document.getElementById("state").innerHTML = applicationCache.status;
+                  applicationCache.addEventListener('cached', function() {
+                    document.getElementById("finished").innerHTML = 'cached';
+                  });
+                  applicationCache.addEventListener('error', function() {
+                    document.getElementById("finished").innerHTML = 'error';
+                  });
+                </script>
+              </body>
+            </html>
+          HTML
+        end
+
+        get '/4aaffa31-f42d-403e-a19e-6b248d608087' do
+          visited << 'simple'
+          <<-HTML
+            <html manifest="/8d853f09-4275-409d-954d-ebbf6e2ce732">
+              <body>
+              </body>
+            </html>
+          HTML
+        end
+      end
+    end
+
+    before { visit("/f8742c39-8bef-4196-b1c3-80f8a3d65f3e") }
+
+    it "has proper state available" do
+      driver.find_xpath("//*[@id='state']").first.visible_text.should == '0'
+      sleep 1
+      @visited.should eq(['complex', 'manifest', 'simple']), 'files were not downloaded in expected order'
+      driver.find_xpath("//*[@id='finished']").first.visible_text.should == 'cached'
+    end
+
+    it "is cleared on driver reset!" do
+      sleep 1
+      @visited.should eq(['complex', 'manifest', 'simple']), 'files were not downloaded in expected order'
+      driver.reset!
+      @visited.clear
+      visit '/4aaffa31-f42d-403e-a19e-6b248d608087'
+      sleep 1
+      @visited.should eq(['simple', 'manifest', 'simple']), 'simple action was used from cache instead of server'
+    end
+  end
+
   context "form app with server-side handler" do
     let(:driver) do
       driver_for_app do
@@ -1925,6 +2384,42 @@ describe Capybara::Webkit::Driver do
       end
     end
 
+    it "can switch to another window" do
+      visit("/new_window")
+      driver.switch_to_window(driver.window_handles.last)
+      driver.find_xpath("//p").first.visible_text.should eq "finished"
+    end
+
+    it "knows the current window handle" do
+      visit("/new_window")
+      driver.within_window(driver.window_handles.last) do
+        driver.current_window_handle.should eq driver.window_handles.last
+      end
+    end
+
+    it "can close the current window" do
+      visit("/new_window")
+      original_handle = driver.current_window_handle
+      driver.switch_to_window(driver.window_handles.last)
+      driver.close_window(driver.current_window_handle)
+
+      driver.current_window_handle.should eq(original_handle)
+    end
+
+    it "can close an unfocused window" do
+      visit("/new_window")
+      driver.close_window(driver.window_handles.last)
+      driver.window_handles.size.should eq(1)
+    end
+
+    it "can close the last window" do
+      visit("/new_window")
+      handles = driver.window_handles
+      handles.each { |handle| driver.close_window(handle) }
+      driver.html.should be_empty
+      handles.should_not include(driver.current_window_handle)
+    end
+
     it "waits for the new window to load" do
       visit("/new_window?sleep=1")
       driver.within_window(driver.window_handles.last) do
@@ -1969,7 +2464,7 @@ describe Capybara::Webkit::Driver do
 
     it "raises an error if the window is not found" do
       expect { driver.within_window('myWindowDoesNotExist') }.
-        to raise_error(Capybara::Webkit::InvalidResponseError)
+        to raise_error(Capybara::Webkit::NoSuchWindowError)
     end
 
     it "has a number of window handles equal to the number of open windows" do
@@ -1978,11 +2473,34 @@ describe Capybara::Webkit::Driver do
       driver.window_handles.size.should eq 2
     end
 
+    it "removes windows when closed via JavaScript" do
+      visit("/new_window")
+      driver.execute_script('console.log(window.document.title); window.close()')
+      sleep 2
+      driver.window_handles.size.should eq 1
+    end
+
     it "closes new windows on reset" do
       visit("/new_window")
       last_handle = driver.window_handles.last
       driver.reset!
       driver.window_handles.should_not include(last_handle)
+    end
+
+    it "leaves the old window focused when opening a new window" do
+      visit("/new_window")
+      current_window = driver.current_window_handle
+      driver.open_new_window
+
+      driver.current_window_handle.should eq current_window
+      driver.window_handles.size.should eq 3
+    end
+
+    it "opens blank windows" do
+      visit("/new_window")
+      driver.open_new_window
+      driver.switch_to_window(driver.window_handles.last)
+      driver.html.should be_empty
     end
   end
 
@@ -2078,26 +2596,33 @@ describe Capybara::Webkit::Driver do
     end
 
     it "can authenticate a request" do
-      driver.browser.authenticate('user', 'password')
+      driver.authenticate('user', 'password')
       visit("/")
       driver.html.should include("Basic "+Base64.encode64("user:password").strip)
     end
 
     it "returns 401 for incorrectly authenticated request" do
-      driver.browser.authenticate('user1', 'password1')
-      driver.browser.timeout = 2
+      driver.authenticate('user1', 'password1')
       lambda { visit("/") }.should_not raise_error
       driver.status_code.should eq 401
     end
 
     it "returns 401 for unauthenticated request" do
-      driver.browser.timeout = 2
+      lambda { visit("/") }.should_not raise_error
+      driver.status_code.should eq 401
+    end
+
+    it "can be reset with subsequent authenticate call", skip_on_qt4: true do
+      driver.authenticate('user', 'password')
+      visit("/")
+      driver.html.should include("Basic "+Base64.encode64("user:password").strip)
+      driver.authenticate('user1', 'password1')
       lambda { visit("/") }.should_not raise_error
       driver.status_code.should eq 401
     end
   end
 
-  describe "url blacklisting" do
+  describe "url blacklisting", skip_if_offline: true do
     let(:driver) do
       driver_for_app do
         get "/" do
@@ -2108,6 +2633,7 @@ describe Capybara::Webkit::Driver do
               <iframe src="http://example.com/path" id="frame1"></iframe>
               <iframe src="http://example.org/path/to/file" id="frame2"></iframe>
               <iframe src="/frame" id="frame3"></iframe>
+              <iframe src="http://example.org/foo/bar" id="frame4"></iframe>
             </body>
           </html>
           HTML
@@ -2132,9 +2658,12 @@ describe Capybara::Webkit::Driver do
     end
 
     before do
-      driver.browser.url_blacklist = ["http://example.org/path/to/file",
-                                      "http://example.com",
-                                      "#{AppRunner.app_host}/script"]
+      configure do |config|
+        config.block_url "http://example.org/path/to/file"
+        config.block_url "http://example.*/foo/*"
+        config.block_url "http://example.com"
+        config.block_url "#{AppRunner.app_host}/script"
+      end
     end
 
     it "should not fetch urls blocked by host" do
@@ -2163,10 +2692,110 @@ describe Capybara::Webkit::Driver do
       end
     end
 
+    it "should not fetch urls blocked by wildcard match" do
+      visit('/')
+      driver.within_frame('frame4') do
+        driver.find("//body").first.text.should be_empty
+      end
+    end
+
     it "returns a status code for blocked urls" do
       visit("/")
       driver.within_frame('frame1') do
         driver.status_code.should eq 200
+      end
+    end
+  end
+
+  describe "url whitelisting", skip_if_offline: true do
+    it_behaves_like "output writer" do
+      let(:driver) do
+        driver_for_html(<<-HTML, browser: browser)
+          <<-HTML
+            <html>
+              <body>
+                <iframe src="http://example.com/path" id="frame"></iframe>
+                <iframe src="http://www.example.com" id="frame2"></iframe>
+                <iframe src="data:text/plain,Hello"></iframe>
+              </body>
+            </html>
+        HTML
+      end
+
+      it "prints a warning for remote requests by default" do
+        visit("/")
+
+        expect(stderr).to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+      end
+
+      it "can allow specific hosts" do
+        configure do |config|
+          config.allow_url("example.com")
+          config.allow_url("www.example.com")
+        end
+
+        visit("/")
+
+        expect(stderr).not_to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+        driver.within_frame("frame") do
+          expect(driver.find("//body").first.text).not_to be_empty
+        end
+      end
+
+      it "can allow all hosts" do
+        configure(&:allow_unknown_urls)
+        visit("/")
+
+        expect(stderr).not_to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+        driver.within_frame("frame") do
+          expect(driver.find("//body").first.text).not_to be_empty
+        end
+      end
+
+      it "resets allowed hosts on reset" do
+        driver.allow_unknown_urls
+        driver.reset!
+        visit("/")
+
+        expect(stderr).to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)        
+      end
+
+      it "can block unknown hosts" do
+        configure(&:block_unknown_urls)
+        visit("/")
+
+        expect(stderr).not_to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+        driver.within_frame("frame") do
+          expect(driver.find("//body").first.text).to be_empty
+        end
+      end
+
+      it "can allow urls with wildcards" do
+        configure { |config| config.allow_url("*/path") }
+        visit("/")
+
+        expect(stderr).to include("www.example.com")
+        expect(stderr).not_to include("example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+      end
+
+      it "whitelists localhost on reset" do
+        driver.reset!
+
+        visit("/")
+
+        expect(stderr).not_to include(driver.current_url)
+      end
+
+      it "does not print a warning for data URIs" do
+        visit("/")
+
+        expect(stderr).not_to include('Request to unknown URL: data:text/plain')
       end
     end
   end
@@ -2197,77 +2826,69 @@ describe Capybara::Webkit::Driver do
     end
 
     it "should not raise a timeout error when zero" do
-      driver.browser.timeout = 0
+      configure { |config| config.timeout = 0 }
       lambda { visit("/") }.should_not raise_error
     end
 
     it "should raise a timeout error" do
-      driver.browser.timeout = 1
+      configure { |config| config.timeout = 1 }
       lambda { visit("/") }.should raise_error(Timeout::Error, "Request timed out after 1 second(s)")
     end
 
     it "should not raise an error when the timeout is high enough" do
-      driver.browser.timeout = 10
+      configure { |config| config.timeout = 10 }
       lambda { visit("/") }.should_not raise_error
     end
 
     it "should set the timeout for each request" do
-      driver.browser.timeout = 10
+      configure { |config| config.timeout = 10 }
       lambda { visit("/") }.should_not raise_error
-      driver.browser.timeout = 1
+      driver.timeout = 1
       lambda { visit("/") }.should raise_error(Timeout::Error)
     end
 
     it "should set the timeout for each request" do
-      driver.browser.timeout = 1
+      configure { |config| config.timeout = 1 }
       lambda { visit("/") }.should raise_error(Timeout::Error)
       driver.reset!
-      driver.browser.timeout = 10
+      driver.timeout = 10
       lambda { visit("/") }.should_not raise_error
     end
 
     it "should raise a timeout on a slow form" do
-      driver.browser.timeout = 3
+      configure { |config| config.timeout = 3 }
       visit("/")
       driver.status_code.should eq 200
-      driver.browser.timeout = 1
+      driver.timeout = 1
       driver.find_xpath("//input").first.click
       lambda { driver.status_code }.should raise_error(Timeout::Error)
     end
 
     it "get timeout" do
-      driver.browser.timeout = 10
+      configure { |config| config.timeout = 10 }
       driver.browser.timeout.should eq 10
-      driver.browser.timeout = 3
-      driver.browser.timeout.should eq 3
     end
   end
 
   describe "logger app" do
-    it "logs nothing before turning on the logger" do
-      visit("/")
-      log.should_not include logging_message
-    end
+    it_behaves_like "output writer" do
+      let(:driver) do
+        driver_for_html("<html><body>Hello</body></html>", browser: browser)
+      end
 
-    it "logs its commands after turning on the logger" do
-      driver.enable_logging
-      visit("/")
-      log.should include logging_message
-    end
+      it "logs nothing in normal mode" do
+        configure { |config| config.debug = false }
+        visit("/")
+        stderr.should_not include logging_message
+      end
 
-    let(:logging_message) { 'Wrote response true' }
+      it "logs its commands in debug mode" do
+        configure { |config| config.debug = true }
+        visit("/")
+        stderr.should include logging_message
+      end
 
-    let(:driver) do
-      connection = Capybara::Webkit::Connection.new(:stderr => output)
-      browser = Capybara::Webkit::Browser.new(connection)
-      Capybara::Webkit::Driver.new(AppRunner.app, :browser => browser)
-    end
-
-    let(:output) { StringIO.new }
-
-    def log
-      output.rewind
-      output.read
+      let(:logging_message) { 'Wrote response true' }
     end
   end
 
@@ -2380,6 +3001,336 @@ describe Capybara::Webkit::Driver do
       result.should =~ /Qt: \d+\.\d+\.\d+/
       result.should =~ /WebKit: \d+\.\d+/
       result.should =~ /QtWebKit: \d+\.\d+/
+    end
+  end
+
+  context "history" do
+    let(:driver) do
+      driver_for_app do
+        get "/:param" do |param|
+          <<-HTML
+            <html>
+              <body>
+                <p>#{param}</p>
+                <a href="/navigated">Navigate</a>
+              </body>
+            </html>
+          HTML
+        end
+      end
+    end
+
+    it "can navigate in history" do
+      visit("/first")
+      driver.find_xpath("//p").first.text.should eq('first')
+      driver.find_xpath("//a").first.click
+      driver.find_xpath("//p").first.text.should eq('navigated')
+      driver.go_back
+      driver.find_xpath("//p").first.text.should eq('first')
+      driver.go_forward
+      driver.find_xpath("//p").first.text.should eq('navigated')
+    end
+  end
+
+  context "response header contains colon" do
+    let(:driver) do
+      driver_for_app do
+        get "/" do
+          headers "Content-Disposition" => 'filename="File: name.txt"'
+        end
+      end
+    end
+
+    it "sets the response header" do
+      visit("/")
+
+      expect(
+        driver.response_headers["Content-Disposition"]
+      ).to eq 'filename="File: name.txt"'
+    end
+  end
+
+  context "with unfinished responses" do
+    it_behaves_like "output writer" do
+      let(:driver) do
+        count = 0
+        driver_for_app browser: browser do
+          get "/" do
+            count += 1
+            <<-HTML
+              <html>
+                <body>
+                  <script type="text/javascript">
+                    setTimeout(function () {
+                      xhr = new XMLHttpRequest();
+                      xhr.open('GET', '/async?#{count}', true);
+                      xhr.setRequestHeader('Content-Type', 'text/plain');
+                      xhr.send();
+                    }, 50);
+                  </script>
+                </body>
+              </html>
+            HTML
+          end
+
+          get "/async" do
+            sleep 2
+            ""
+          end
+        end
+      end
+
+      it "aborts unfinished responses" do
+        driver.enable_logging
+        visit "/"
+        sleep 0.5
+        visit "/"
+        sleep 0.5
+        driver.reset!
+        stderr.should abort_request_to("/async?2")
+        stderr.should_not abort_request_to("/async?1")
+      end
+
+      def abort_request_to(path)
+        include(%{Aborting request to "#{url(path)}"})
+      end
+    end
+  end
+
+  context "when the driver process crashes" do
+    let(:driver) do
+      driver_for_app browser: browser do
+        get "/" do
+          "<html><body>Relaunched</body></html>"
+        end
+      end
+    end
+
+    let(:browser) { Capybara::Webkit::Browser.new(connection) }
+    let(:connection) { Capybara::Webkit::Connection.new }
+
+    it "reports and relaunches on reset" do
+      Process.kill "KILL", connection.pid
+      expect { driver.reset! }.to raise_error(Capybara::Webkit::CrashError)
+      visit "/"
+      expect(driver.html).to include("Relaunched")
+    end
+  end
+
+  context "handling of SSL validation errors" do
+    before do
+      # set up minimal HTTPS server
+      @host = "127.0.0.1"
+      @server = TCPServer.new(@host, 0)
+      @port = @server.addr[1]
+
+      # set up SSL layer
+      ssl_serv = OpenSSL::SSL::SSLServer.new(@server, $openssl_self_signed_ctx)
+
+      @server_thread = Thread.new(ssl_serv) do |serv|
+        while conn = serv.accept do
+          # read request
+          request = []
+          until (line = conn.readline.strip).empty?
+            request << line
+          end
+
+          # write response
+          html = "<html><body>D'oh!</body></html>"
+          conn.write "HTTP/1.1 200 OK\r\n"
+          conn.write "Content-Type:text/html\r\n"
+          conn.write "Content-Length: %i\r\n" % html.size
+          conn.write "\r\n"
+          conn.write html
+          conn.close
+        end
+      end
+    end
+
+    after do
+      @server_thread.kill
+      @server.close
+    end
+
+    context "with default settings" do
+      it "doesn't accept a self-signed certificate" do
+        lambda { driver.visit "https://#{@host}:#{@port}/" }.should raise_error
+      end
+
+      it "doesn't accept a self-signed certificate in a new window" do
+        driver.execute_script("window.open('about:blank')")
+        driver.switch_to_window(driver.window_handles.last)
+        lambda { driver.visit "https://#{@host}:#{@port}/" }.should raise_error
+      end
+    end
+
+    context "ignoring SSL errors" do
+      it "accepts a self-signed certificate if configured to do so" do
+        configure(&:ignore_ssl_errors)
+        driver.visit "https://#{@host}:#{@port}/"
+      end
+
+      it "accepts a self-signed certificate in a new window when configured" do
+        configure(&:ignore_ssl_errors)
+        driver.execute_script("window.open('about:blank')")
+        driver.switch_to_window(driver.window_handles.last)
+        driver.visit "https://#{@host}:#{@port}/"
+      end
+    end
+
+    let(:driver) { driver_for_html("", browser: browser) }
+    let(:browser) { Capybara::Webkit::Browser.new(connection) }
+    let(:connection) { Capybara::Webkit::Connection.new }
+  end
+
+  context "skip image loading" do
+    let(:driver) do
+      driver_for_app do
+        requests = []
+
+        get "/" do
+          <<-HTML
+            <html>
+              <head>
+                <style>
+                  body {
+                    background-image: url(/path/to/bgimage);
+                  }
+                </style>
+              </head>
+              <body>
+                <img src="/path/to/image"/>
+              </body>
+            </html>
+          HTML
+        end
+
+        get "/requests" do
+          <<-HTML
+            <html>
+              <body>
+                #{requests.map { |path| "<p>#{path}</p>" }.join}
+              </body>
+            </html>
+          HTML
+        end
+
+        get %r{/path/to/(.*)} do |path|
+          requests << path
+        end
+      end
+    end
+
+    it "should load images by default" do
+      visit("/")
+      requests.should match_array %w(image bgimage)
+    end
+
+    it "should not load images when disabled" do
+      configure(&:skip_image_loading)
+      visit("/")
+      requests.should eq []
+    end
+
+    let(:requests) do
+      visit "/requests"
+      driver.find("//p").map(&:text)
+    end
+  end
+
+  describe "#set_proxy" do
+    before do
+      @host = "127.0.0.1"
+      @user = "user"
+      @pass = "secret"
+      @url  = "http://example.org/"
+
+      @server = TCPServer.new(@host, 0)
+      @port = @server.addr[1]
+
+      @proxy_requests = []
+      @proxy = Thread.new(@server, @proxy_requests) do |serv, proxy_requests|
+        while conn = serv.accept do
+          # read request
+          request = []
+          until (line = conn.readline.strip).empty?
+            request << line
+          end
+
+          # send response
+          auth_header = request.find { |h| h =~ /Authorization:/i }
+          if auth_header || request[0].split(/\s+/)[1] =~ /^\//
+            html = "<html><body>D'oh!</body></html>"
+            conn.write "HTTP/1.1 200 OK\r\n"
+            conn.write "Content-Type:text/html\r\n"
+            conn.write "Content-Length: %i\r\n" % html.size
+            conn.write "\r\n"
+            conn.write html
+            conn.close
+            proxy_requests << request if auth_header
+          else
+            conn.write "HTTP/1.1 407 Proxy Auth Required\r\n"
+            conn.write "Proxy-Authenticate: Basic realm=\"Proxy\"\r\n"
+            conn.write "\r\n"
+            conn.close
+            proxy_requests << request
+          end
+        end
+      end
+
+      configure do |config|
+        config.allow_url("example.org")
+        config.use_proxy host: @host, port: @port, user: @user, pass: @pass
+      end
+
+      driver.visit @url
+      @proxy_requests.size.should eq 2
+      @request = @proxy_requests[-1]
+    end
+
+    after do
+      @proxy.kill
+      @server.close
+    end
+
+    let(:driver) do
+      driver_for_html("", browser: nil)
+    end
+
+    it "uses the HTTP proxy correctly" do
+      @request[0].should match(/^GET\s+http:\/\/example.org\/\s+HTTP/i)
+      @request.find { |header|
+        header =~ /^Host:\s+example.org$/i }.should_not be nil
+    end
+
+    it "sends correct proxy authentication" do
+      auth_header = @request.find { |header|
+        header =~ /^Proxy-Authorization:\s+/i }
+      auth_header.should_not be nil
+
+      user, pass = Base64.decode64(auth_header.split(/\s+/)[-1]).split(":")
+      user.should eq @user
+      pass.should eq @pass
+    end
+
+    it "uses the proxy's response" do
+      driver.html.should include "D'oh!"
+    end
+
+    it "uses original URL" do
+      driver.current_url.should eq @url
+    end
+
+    it "uses URLs changed by javascript" do
+      driver.execute_script %{window.history.pushState("", "", "/blah")}
+      driver.current_url.should eq "http://example.org/blah"
+    end
+
+    it "is possible to disable proxy again" do
+      @proxy_requests.clear
+      driver.browser.clear_proxy
+      driver.visit "http://#{@host}:#{@port}/"
+      @proxy_requests.size.should eq 0
     end
   end
 

@@ -1,7 +1,7 @@
-appraise "2.0" do
-  gem "capybara", "~> 2.0.2"
+appraise "2.3" do
+  gem "capybara", "~> 2.3.0"
 end
 
-appraise "2.1" do
-  gem "capybara", "~> 2.1.0"
+appraise "2.4" do
+  gem "capybara", "~> 2.4.0"
 end

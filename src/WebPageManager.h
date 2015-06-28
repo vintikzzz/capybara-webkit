@@ -7,9 +7,13 @@
 #include <QDebug>
 #include <QFile>
 
+#include "UnknownUrlHandler.h"
+
 class WebPage;
 class NetworkCookieJar;
 class NetworkAccessManager;
+class BlacklistedRequestHandler;
+class CustomHeadersRequestHandler;
 
 class WebPageManager : public QObject {
   Q_OBJECT
@@ -20,7 +24,8 @@ class WebPageManager : public QObject {
     QList<WebPage *> pages() const;
     void setCurrentPage(WebPage *);
     WebPage *currentPage() const;
-    WebPage *createPage(QObject *parent);
+    WebPage *createPage();
+    void removePage(WebPage *);
     void setIgnoreSslErrors(bool);
     bool ignoreSslErrors();
     void setTimeout(int);
@@ -32,13 +37,22 @@ class WebPageManager : public QObject {
     void enableLogging();
     void replyFinished(QNetworkReply *reply);
     NetworkAccessManager *networkAccessManager();
+    void setUrlBlacklist(const QStringList &);
+    void addHeader(QString, QString);
+    void setUnknownUrlMode(UnknownUrlHandler::Mode);
+    void allowUrl(const QString &);
+    void blockUrl(const QString &);
 
   public slots:
     void emitLoadStarted();
     void setPageStatus(bool);
     void requestCreated(QByteArray &url, QNetworkReply *reply);
     void handleReplyFinished();
+<<<<<<< HEAD
     void emitReset();
+=======
+    void replyDestroyed(QObject *);
+>>>>>>> upstream/master
 
   signals:
     void pageFinished(bool);
@@ -49,6 +63,7 @@ class WebPageManager : public QObject {
     static void handleDebugMessage(QtMsgType type, const char *message);
 
     QList<WebPage *> m_pages;
+    QList<QNetworkReply *> m_pendingReplies;
     WebPage *m_currentPage;
     bool m_ignoreSslErrors;
     NetworkCookieJar *m_cookieJar;
@@ -58,7 +73,9 @@ class WebPageManager : public QObject {
     QFile *m_ignoredOutput;
     int m_timeout;
     NetworkAccessManager *m_networkAccessManager;
+    BlacklistedRequestHandler *m_blacklistedRequestHandler;
+    CustomHeadersRequestHandler *m_customHeadersRequestHandler;
+    UnknownUrlHandler *m_unknownUrlHandler;
 };
 
 #endif // _WEBPAGEMANAGER_H
-

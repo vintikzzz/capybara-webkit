@@ -21,13 +21,16 @@ int main(int argc, char **argv) {
   app.setOrganizationDomain("thoughtbot.com");
   QStringList args = app.arguments();
   int port = 0;
-  if (args.count() == 2) 
+  if (args.count() == 2)
   {
     port = args[1].toInt();
   }
 
   StdinNotifier notifier;
-  QObject::connect(&notifier, SIGNAL(eof()), &app, SLOT(quit()));
+  if (port == 0)
+  {
+    QObject::connect(&notifier, SIGNAL(eof()), &app, SLOT(quit()));
+  }
 
   ignoreDebugOutput();
   Server server(0);

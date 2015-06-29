@@ -12,18 +12,8 @@ module Capybara::Webkit
 
     def initialize(options = {})
       @socket = nil
-<<<<<<< HEAD
       @socket_class = options[:socket_class] || TCPSocket
       @port = options[:port] || 0
-=======
-      if options.has_key?(:socket_class)
-        warn '[DEPRECATION] The Capybara::Webkit::Connection `socket_class` ' \
-          'option is deprecated without replacement.'
-        @socket_class = options[:socket_class]
-      else
-        @socket_class = TCPSocket
-      end
->>>>>>> upstream/master
       if options.has_key?(:stderr)
         @output_target = options[:stderr]
       elsif options.has_key?(:stdout)
@@ -34,7 +24,7 @@ module Capybara::Webkit
         @output_target = $stderr
       end
       start_server
-      connect
+      connect unless @port.zero?
     end
 
     def puts(string)
@@ -82,7 +72,6 @@ module Capybara::Webkit
     end
 
     def open_pipe
-<<<<<<< HEAD
       _, @pipe_stdout, @pipe_stderr, wait_thr = Open3.popen3(SERVER_PATH + ' ' + @port)
       @pid = wait_thr[:pid]
       register_shutdown_hook
@@ -95,9 +84,6 @@ module Capybara::Webkit
           kill_process
         end
       end
-=======
-      @pipe_stdin, @pipe_stdout, @pipe_stderr, @wait_thr = Open3.popen3(SERVER_PATH)
->>>>>>> upstream/master
     end
 
     def parse_port(line)

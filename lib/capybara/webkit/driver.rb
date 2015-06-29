@@ -12,13 +12,9 @@ module Capybara::Webkit
     def initialize(app, options={})
       @app = app
       @options = options
-<<<<<<< HEAD
       @connection_class = options[:connection_class] || Connection
       @browser = options[:browser] || Browser.new(@connection_class.new(options))
-=======
-      @browser = options[:browser] || Browser.new(Connection.new(options))
       apply_options
->>>>>>> upstream/master
     end
 
     def enable_logging

@@ -65,14 +65,25 @@ module Capybara::Webkit
     end
 
     def gets
-      with_retry do |s|
-        s.gets
+      response = ""
+      until response.match(/\n/) do
+        response += read(1)
       end
+      response
     end
 
     def read(length)
       with_retry do |s|
-        socket.read(length)
+        response = ""
+        begin
+          while response.length < length do
+            response += s.read_nonblock(length - response.length)
+          end
+        rescue IO::WaitReadable
+          Thread.new { IO.select([s]) }.join
+          retry
+        end
+        response
       end
     end
   end

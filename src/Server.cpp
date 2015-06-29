@@ -8,10 +8,7 @@ Server::Server(QObject *parent) : QObject(parent) {
   m_tcp_server = new QTcpServer(this);
 }
 
-<<<<<<< HEAD
 bool Server::start(int port) {
-=======
-bool Server::start() {
 #if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
   QTextStream(stderr) <<
     "WARNING: The next major version of capybara-webkit " <<
@@ -19,7 +16,6 @@ bool Server::start() {
     "You're using version " << QT_VERSION_STR << "." << endl;
 #endif
 
->>>>>>> upstream/master
   connect(m_tcp_server, SIGNAL(newConnection()), this, SLOT(handleConnection()));
   return m_tcp_server->listen(QHostAddress::LocalHost, port);
 }

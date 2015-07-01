@@ -111,6 +111,10 @@ module Capybara::Webkit
       command("WindowClose", selector)
     end
 
+    def connection_close
+      @connection.close
+    end
+
     def window_resize(handle, width, height)
       command("WindowResize", handle, width.to_i, height.to_i)
     end

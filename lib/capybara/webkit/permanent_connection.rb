@@ -18,10 +18,17 @@ module Capybara::Webkit
     def key
       @host + @port.to_s
     end
+    def close
+      sockets = self.class.sockets
+      if !sockets.key?(key)
+        socket.close()
+        sockets.delete(key)
+      end
+    end
     def socket
       sockets = self.class.sockets
       s = nil
-      if(!sockets.key?(key))
+      if !sockets.key?(key)
         Timeout.timeout(@timeout) do
           while s.nil?
             begin
@@ -30,7 +37,7 @@ module Capybara::Webkit
                 s.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, true)
               end
               at_exit do
-                s.close
+                close
               end
             rescue Errno::ECONNREFUSED
             end

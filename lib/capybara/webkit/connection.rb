@@ -115,6 +115,9 @@ module Capybara::Webkit
       end
     end
 
+    def close
+    end
+
     def attempt_connect
       @socket = @socket_class.open("127.0.0.1", @port)
       if defined?(Socket::TCP_NODELAY)

@@ -174,6 +174,10 @@ module Capybara::Webkit
       @browser.window_close(selector)
     end
 
+    def close_connection()
+      @browser.connection_close
+    end
+
     def maximize_window(selector)
       @browser.window_maximize(selector)
     end

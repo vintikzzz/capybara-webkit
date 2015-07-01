@@ -20,7 +20,7 @@ module Capybara::Webkit
     end
     def close
       sockets = self.class.sockets
-      if !sockets.key?(key)
+      if sockets.key?(key)
         socket.close()
         sockets.delete(key)
       end

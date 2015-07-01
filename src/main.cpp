@@ -2,7 +2,6 @@
 #include "IgnoreDebugOutput.h"
 #include "StdinNotifier.h"
 #include <QApplication>
-#include <QCommandLineOption>
 #include <iostream>
 #ifdef Q_OS_UNIX
   #include <unistd.h>
@@ -20,15 +19,13 @@ int main(int argc, char **argv) {
   app.setApplicationName("capybara-webkit");
   app.setOrganizationName("thoughtbot, inc");
   app.setOrganizationDomain("thoughtbot.com");
-  QCommandLineParser parser;
-  parser.setApplicationDescription("capybara-webkit");
-  parser.addHelpOption();
-  QCommandLineOption portOption(QStringList() << "p" << "port",
-    QCoreApplication::translate("main", "Sets <port> to listen."),
-    QCoreApplication::translate("main", "port"), "0");
-  parser.addOption(portOption);
-  parser.process(app);
-  int port = parser.value(portOption).toInt();
+  QStringList args = app.arguments();
+  int port = 0;
+  if (args.count() == 2)
+  {
+    port = args[1].toInt();
+  }
+
   StdinNotifier notifier;
   if (port == 0)
   {

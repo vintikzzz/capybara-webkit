@@ -1,4 +1,5 @@
 #include <QObject>
+#include <QThreadPool>
 
 class QTcpServer;
 
@@ -22,5 +23,6 @@ class Server : public QObject {
   private:
     QTcpServer *m_tcp_server;
     QMap<int, QTcpSocket *> sockets;
+    QThreadPool *pool;
 };
 

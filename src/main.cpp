@@ -27,10 +27,7 @@ int main(int argc, char **argv) {
   }
 
   StdinNotifier notifier;
-  if (port == 0)
-  {
-    QObject::connect(&notifier, SIGNAL(eof()), &app, SLOT(quit()));
-  }
+  QObject::connect(&notifier, SIGNAL(eof()), &app, SLOT(quit()));
 
   ignoreDebugOutput();
   Server server(0);

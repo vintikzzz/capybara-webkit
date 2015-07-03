@@ -78,7 +78,6 @@ WebPage *Connection::currentPage() {
 }
 
 void Connection::handleDisconnection() {
-  m_manager->deleteLater();
-  this->deleteLater();
-
+  m_manager->reset();
+  m_manager->currentPage()->deleteLater();
 }

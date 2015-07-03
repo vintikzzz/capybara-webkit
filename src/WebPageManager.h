@@ -48,7 +48,6 @@ class WebPageManager : public QObject {
     void setPageStatus(bool);
     void requestCreated(QByteArray &url, QNetworkReply *reply);
     void handleReplyFinished();
-    void emitReset();
     void replyDestroyed(QObject *);
 
   signals:

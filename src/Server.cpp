@@ -39,6 +39,9 @@ void Server::handleTermination() {
   stop();
 }
 void Server::process() {
+  if (queue.count() == 0) {
+    return;
+  }
   QTcpSocket *socket = queue.head();
   int id = socket->socketDescriptor();
   std::cout << "Start processing: " << id << std::endl;
@@ -61,8 +64,6 @@ void Server::handleDisconnection() {
   QTcpSocket *socket = qobject_cast<QTcpSocket *>(sender());
   int id = socket->socketDescriptor();
   queue.dequeue();
-  if(!queue.isEmpty()) {
-    this->process();
-  }
   std::cout << "Client disconnected: " << id << std::endl;
+  this->process();
 }

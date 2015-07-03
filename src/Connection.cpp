@@ -76,3 +76,9 @@ void Connection::writeResponse(Response *response) {
 WebPage *Connection::currentPage() {
   return m_manager->currentPage();
 }
+
+void Connection::handleDisconnection() {
+  m_manager->deleteLater();
+  this->deleteLater();
+
+}

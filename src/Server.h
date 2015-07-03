@@ -1,4 +1,5 @@
 #include <QObject>
+#include <QMutex>
 
 class QTcpServer;
 
@@ -9,6 +10,7 @@ class Server : public QObject {
     Server(QObject *parent);
     bool start(int port = 0);
     void stop();
+    void process();
     quint16 server_port() const;
     QString error_string() const;
 
@@ -21,6 +23,7 @@ class Server : public QObject {
 
   private:
     QTcpServer *m_tcp_server;
-    QMap<int, QTcpSocket *> sockets;
+    QQueue<QTcpSocket *> queue;
+    QMutex mutex;
 };
 

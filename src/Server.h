@@ -1,5 +1,4 @@
 #include <QObject>
-#include <QMutex>
 
 class QTcpServer;
 
@@ -23,7 +22,5 @@ class Server : public QObject {
 
   private:
     QTcpServer *m_tcp_server;
-    QQueue<QTcpSocket *> queue;
-    QMutex mutex;
 };
 

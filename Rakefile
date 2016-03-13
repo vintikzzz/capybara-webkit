@@ -1,7 +1,10 @@
 require 'bundler'
-require 'rspec/core/rake_task'
 require_relative './lib/capybara_webkit_builder'
-require 'appraisal'
+require_relative './lib/capybara/webkit/tasks'
+if ENV['RACK_ENV'] == 'development'
+  require 'rspec/core/rake_task'
+  require 'appraisal'
+end
 
 namespace :bundler do
   Bundler::GemHelper.install_tasks
@@ -29,15 +32,21 @@ end
 
 file 'bin/webkit_server' => :build
 
-RSpec::Core::RakeTask.new do |t|
-  t.pattern = "spec/**/*_spec.rb"
-  t.rspec_opts = "--format progress"
+if ENV['RACK_ENV'] == 'development'
+  RSpec::Core::RakeTask.new do |t|
+    t.pattern = "spec/**/*_spec.rb"
+    t.rspec_opts = "--format progress"
+  end
+
+  task :spec => :build
+
+  desc "Default: build and run all specs"
+  task :default => [:check, :spec]
 end
-
-task :spec => :build
-
-desc "Default: build and run all specs"
-task :default => [:check, :spec]
+if ENV['RACK_ENV'] == 'production'
+  desc "Default: run webkit server"
+  task :default => 'webkit:server'
+end
 
 desc "Generate a new command called NAME"
 task :generate_command do

@@ -1,0 +1,7 @@
+webkit_server:
+  build: .
+  ports:
+    - 40000:40000
+  security_opt:
+    - seccomp:unconfined
+  command: /bin/sh ./run_server.sh

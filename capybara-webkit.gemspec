@@ -19,6 +19,7 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = ">= 1.9.0"
 
+  s.add_dependency("rake")
   s.add_runtime_dependency("capybara", ">= 2.3.0", "< 2.7.0")
   s.add_runtime_dependency("json")
 
@@ -26,9 +27,7 @@ Gem::Specification.new do |s|
   # Sinatra is used by Capybara's TestApp
   s.add_development_dependency("sinatra")
   s.add_development_dependency("mini_magick")
-  s.add_development_dependency("rake")
   s.add_development_dependency("appraisal", "~> 0.4.0")
   s.add_development_dependency("selenium-webdriver")
   s.add_development_dependency("launchy")
 end
-

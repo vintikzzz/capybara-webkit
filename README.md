@@ -6,6 +6,45 @@ capybara-webkit
 
 A [capybara](https://github.com/jnicklas/capybara) driver that uses [WebKit](http://webkit.org) via [QtWebKit](http://trac.webkit.org/wiki/QtWebKit).
 
+About this fork
+---------------
+
+This fork makes it possible to keep webkit server up and running all the time.
+To use this feature you need to switch to this fork:
+
+```ruby
+gem 'capybara-webkit', git: 'git://github.com/vintikzzz/capybara-webkit'
+```
+
+Add additional tasks to your Rakefile:
+```ruby
+require 'capybara/webkit/tasks'
+```
+
+Switch to permanent webkit driver in your app:
+```ruby
+Capybara.javascript_driver = :permanent_webkit
+Capybara.current_driver    = :permanent_webkit
+```
+
+Start webkit server:
+```
+bundle exec rake webkit:server
+```
+
+By default server will bind to port number 40000 and driver will try to connect
+to localhost. But it can be simply changed with environment variables WEBKIT_HOST
+and WEBKIT_PORT.
+
+To run webkit server in a docker:
+```
+git clone https://github.com/vintikzzz/capybara-webkit
+cd capybara-webkit
+docker-compose up
+```
+
+Or you can use image vintikzzz/capybara-webkit-server directly
+
 Qt Dependency and Installation Issues
 -------------------------------------
 

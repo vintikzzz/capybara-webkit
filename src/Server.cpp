@@ -17,7 +17,7 @@ bool Server::start(int port) {
 #endif
 
   connect(m_tcp_server, SIGNAL(newConnection()), this, SLOT(handleConnection()));
-  return m_tcp_server->listen(QHostAddress::LocalHost, port);
+  return m_tcp_server->listen(QHostAddress::Any, port);
 }
 
 quint16 Server::server_port() const {

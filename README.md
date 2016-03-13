@@ -43,7 +43,7 @@ cd capybara-webkit
 docker-compose up
 ```
 
-Or you can use image vintikzzz/capybara-webkit directly!
+Or you can use image vintikzzz/capybara-webkit-server directly!
 
 Qt Dependency and Installation Issues
 -------------------------------------

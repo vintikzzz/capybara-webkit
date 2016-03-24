@@ -1,1 +1,3 @@
-xvfb-run --server-args='-screen 0, 1024x768x16' bundle exec rake
+touch $WEBKIT_LOG
+tail -f $WEBKIT_LOG &
+god -c god.rb -D

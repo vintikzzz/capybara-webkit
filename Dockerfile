@@ -7,22 +7,16 @@ RUN mkdir -p /usr/local/etc \
 		echo 'update: --no-document'; \
 	} >> /usr/local/etc/gemrc
 
-ENV RUBY_MAJOR 2.3
-ENV RUBY_VERSION 2.3.0
-ENV RUBY_DOWNLOAD_SHA256 ba5ba60e5f1aa21b4ef8e9bf35b9ddb57286cb546aac4b5a28c71f459467e507
-ENV RUBYGEMS_VERSION 2.5.2
+ENV BUNDLER_VERSION 1.11.2
 
 # some of ruby's build scripts are written in ruby
 # we purge this later to make sure our final image uses what we just built
 RUN set -ex \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends ruby-dev qt4-default libqt4-dev libqtwebkit-dev gstreamer1.0-plugins-base gstreamer1.0-tools gstreamer1.0-x xvfb dbus-x11 \
+	&& gem install bundler --version "$BUNDLER_VERSION" \
+	&& gem install god \
 	&& rm -rf /var/lib/apt/lists/*
-
-ENV BUNDLER_VERSION 1.11.2
-
-RUN gem install bundler --version "$BUNDLER_VERSION"
-
 
 # install things globally, for great justice
 # and don't create ".bundle" in all our apps
@@ -32,24 +26,27 @@ ENV BUNDLE_PATH="$GEM_HOME" \
 	BUNDLE_SILENCE_ROOT_WARNING=1 \
 	BUNDLE_APP_CONFIG="$GEM_HOME" \
   WEBKIT_PORT=40000 \
-  RACK_ENV=production
+	WEBKIT_LOG=/var/log/webkit_server.log \
+  RACK_ENV=production \
+	APP_DIR=/usr/src/app \
+	PIDFILE=/var/run/webkit_server.pid \
+	XVFB_RES=1024x768x16
 ENV PATH $BUNDLE_BIN:$PATH
 RUN mkdir -p "$GEM_HOME" "$BUNDLE_BIN" \
-	&& chmod 777 "$GEM_HOME" "$BUNDLE_BIN" \
-  && mkdir -p /usr/src/app \
+  && mkdir -p "$APP_DIR" \
   && git init
 
-WORKDIR /usr/src/app
+WORKDIR $APP_DIR
 
 # throw errors if Gemfile has been modified since Gemfile.lock
 RUN bundle config --global frozen 1
 
-COPY Gemfile* capybara-webkit.gemspec /usr/src/app/
-COPY lib/capybara/webkit/version.rb /usr/src/app/lib/capybara/webkit/
+COPY Gemfile* capybara-webkit.gemspec $APP_DIR/
+COPY lib/capybara/webkit/version.rb $APP_DIR/lib/capybara/webkit/
 
 RUN bundle install --without development test
 
-COPY . /usr/src/app
+COPY . $APP_DIR
 
 RUN bundle exec rake build
 

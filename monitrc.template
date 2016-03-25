@@ -1,0 +1,27 @@
+set daemon 20
+
+set logfile $MONIT_LOG
+
+set statefile /var/lib/monit/state
+
+set eventqueue
+    basedir /var/lib/monit/events
+    slots 100
+
+check process xvfb with pidfile $XVFB_PIDFILE
+    start program = "$APP_DIR/xvfb.sh start"
+    stop program = "$APP_DIR/xvfb.sh stop"
+
+check process webkit_server with pidfile $PIDFILE
+    depends on xvfb
+    start program = "$APP_DIR/server.sh start"
+    stop program = "$APP_DIR/server.sh stop"
+    if failed port $WEBKIT_PORT type TCP then restart
+    if totalmem > 300.0 MB for 5 cycles then restart
+    if cpu > 80% for 5 cycles then restart
+
+check file webkit_log with path $WEBKIT_LOG
+    if size > 1 MB then exec "/bin/rm $WEBKIT_LOG"
+
+check file monit_log with path $MONIT_LOG
+    if size > 1 MB then exec "/bin/rm $MONIT_LOG"

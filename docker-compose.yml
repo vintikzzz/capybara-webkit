@@ -4,4 +4,4 @@ webkit_server:
     - 40000:40000
   security_opt:
     - seccomp:unconfined
-  command: /bin/sh ./run_server.sh
+  command: /bin/sh ./run.sh

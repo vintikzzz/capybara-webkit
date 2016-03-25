@@ -13,9 +13,8 @@ ENV BUNDLER_VERSION 1.11.2
 # we purge this later to make sure our final image uses what we just built
 RUN set -ex \
 	&& apt-get update \
-	&& apt-get install -y --no-install-recommends ruby-dev qt4-default libqt4-dev libqtwebkit-dev gstreamer1.0-plugins-base gstreamer1.0-tools gstreamer1.0-x xvfb dbus-x11 \
+	&& apt-get install -y --no-install-recommends ruby-dev qt4-default libqt4-dev libqtwebkit-dev gstreamer1.0-plugins-base gstreamer1.0-tools gstreamer1.0-x xvfb dbus-x11 monit gettext-base \
 	&& gem install bundler --version "$BUNDLER_VERSION" \
-	&& gem install god \
 	&& rm -rf /var/lib/apt/lists/*
 
 # install things globally, for great justice
@@ -30,7 +29,10 @@ ENV BUNDLE_PATH="$GEM_HOME" \
   RACK_ENV=production \
 	APP_DIR=/usr/src/app \
 	PIDFILE=/var/run/webkit_server.pid \
-	XVFB_RES=1024x768x16
+	XVFB_RES=1024x768x16 \
+	DISPLAY=:99 \
+	MONIT_LOG=/var/log/monit.log \
+	XVFB_PIDFILE=/var/run/xvfb.pid
 ENV PATH $BUNDLE_BIN:$PATH
 RUN mkdir -p "$GEM_HOME" "$BUNDLE_BIN" \
   && mkdir -p "$APP_DIR" \
@@ -51,8 +53,11 @@ COPY . $APP_DIR
 RUN bundle exec rake build
 
 RUN rm -rf src \
-  && rm -rf test
+  && rm -rf test \
+	&& chmod +x server.sh \
+	&& chmod +x run.sh \
+	&& chmod +x xvfb.sh
 
 EXPOSE $WEBKIT_PORT
 
-CMD ["/bin/sh", "./run_server.sh"]
+CMD ["/bin/sh", "./run.sh"]
